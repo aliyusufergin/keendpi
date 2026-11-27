@@ -16,7 +16,7 @@ The opkg feed is served by GitHub Pages from the `gh-pages` branch, which the re
 ## Each release
 
 1. Set `version` in `Cargo.toml`. The release job refuses a tag that doesn't match it.
-2. Add a section to `CHANGELOG.md`. Its whole text becomes the release notes.
+2. Add a `## <version>` section to `CHANGELOG.md`. That section becomes the release notes.
 3. Commit, then tag and push:
 
    ```sh
