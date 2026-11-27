@@ -1,0 +1,16 @@
+# Discord
+discord.com
+discord.gg
+discord.media
+discord.dev
+discord.new
+discord.gift
+discord.co
+discordapp.com
+discordapp.net
+discordcdn.com
+discordstatus.com
+dis.gd
+# Other sites blocked on Turkish ISPs (seen on Kablonet, 2026-11)
+pastebin.com
+wattpad.com

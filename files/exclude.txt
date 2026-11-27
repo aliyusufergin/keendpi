@@ -1,0 +1,1 @@
+# Domains that never get the bypass, one per line.

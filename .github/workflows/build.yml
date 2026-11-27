@@ -1,0 +1,90 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-musl
+            arch: aarch64-3.10
+            tier: stable
+          # Tier 3 for Rust: nightly + build-std, linked with zig. Built but untested on a router.
+          # Pinned: zig 0.16's libc fails to link here, cargo-zigbuild >= 0.20 names targets zig 0.13
+          # does not know, and zig's mipsel libc must be told to match Rust's soft-float ABI.
+          - target: mipsel-unknown-linux-musl
+            arch: mipsel-3.4
+            tier: nightly
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (stable)
+        if: matrix.tier == 'stable'
+        run: rustup target add ${{ matrix.target }}
+      - name: Toolchain (nightly + zig)
+        if: matrix.tier == 'nightly'
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          pip install ziglang==0.13.0
+          cargo install --locked cargo-zigbuild@0.19.8
+      - name: Unit tests
+        if: matrix.tier == 'stable'
+        run: cargo test
+      - name: Build (stable)
+        if: matrix.tier == 'stable'
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build (nightly)
+        if: matrix.tier == 'nightly'
+        env:
+          RUSTFLAGS: -C link-arg=-mcpu=mips32r2+soft_float
+        run: cargo +nightly zigbuild --release --target ${{ matrix.target }} -Z build-std=std,panic_abort
+      - name: Package
+        run: |
+          sh -n files/rules.sh && sh -n files/S51gecit && sh -n files/50-gecit.sh
+          tools/mkipk.sh ${{ matrix.arch }} target/${{ matrix.target }}/release/gecit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipk-${{ matrix.arch }}
+          path: dist/*.ipk
+
+  # On a version tag: a GitHub release with the packages, and the opkg feed on GitHub Pages.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ipk-*
+          merge-multiple: true
+          path: dist
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.ipk --title "gecit $GITHUB_REF_NAME" --notes-file CHANGELOG.md --verify-tag
+      - name: Feed
+        run: |
+          tools/mkfeed.sh site/opkg dist/*.ipk
+          printf '<!doctype html><meta charset="utf-8"><title>gecit opkg feed</title><p>opkg feed for <a href="https://github.com/%s">gecit</a>: <code>src/gz gecit https://%s.github.io/%s/opkg</code></p>\n' \
+            "$GITHUB_REPOSITORY" "${GITHUB_REPOSITORY_OWNER}" "${GITHUB_REPOSITORY#*/}" > site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
