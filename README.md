@@ -25,6 +25,7 @@
 - [Operatörler](#operatörler)
 - [Modeller](#modeller)
 - [Sınırlar](#sınırlar)
+- [Sorumluluk](#sorumluluk)
 - [Geliştirme](#geliştirme)
 - [Lisans](#lisans)
 
@@ -42,7 +43,8 @@ gecit, engelli bir siteye giden bağlantının ilk paketinden hemen önce **saht
 
 1. **OPKG ve Entware.** Keenetic web arayüzünde, genel sistem ayarlarındaki bileşen seçeneklerinden şu bileşenler kurulu olmalı:
    - **OPKG paket yöneticisi**,
-   - **Netfilter alt sistemi için çekirdek modülleri** (Netfilter subsystem kernel modules).
+   - **Netfilter alt sistemi için çekirdek modülleri** (Netfilter subsystem kernel modules),
+   - **DNS-over-TLS proxy** ve/veya **DNS-over-HTTPS proxy** (madde 2 için).
 
    Entware bir USB belleğe kurulu olmalı (help.keenetic.com'da "Entware" diye aratınca çıkan resmi rehber). Entware'e SSH ile bağlanabilmelisin (genellikle `ssh root@192.168.1.1 -p 222`).
 
@@ -51,18 +53,27 @@ gecit, engelli bir siteye giden bağlantının ilk paketinden hemen önce **saht
    - düz DNS sunucularını kaldır; internet bağlantısının ayarlarında **sağlayıcının DNS'ini yok say** seçeneğini aç,
    - cihazlara DHCP ile ayrıca DNS sunucusu dağıtıyorsan (ör. `1.1.1.1`), onu da kaldır ki cihazlar router'ı kullansın.
 
+   Aynısı Entware'den, Keenetic komut satırıyla (`ndmc`) da yapılabilir:
+
+   ```sh
+   ndmc -c "dns-proxy tls upstream 1.1.1.1 853 sni cloudflare-dns.com"
+   ndmc -c "no ip name-server 1.1.1.1"        # varsa, her düz DNS sunucusu için
+   ndmc -c "copy running-config startup-config"   # kalıcı kaydet
+   ```
+
    Doğrulama: Entware'de `nslookup discord.com` komutu `195.175.254.2` gibi bir engel adresi değil, gerçek bir adres (`162.159.x.x`) vermeli.
 
 3. Router'da başka bir DPI aracı (zapret, nfqws, ByeDPI vb.) **çalışmamalı**; aynı paketlerle uğraşırlar.
 
 ## Kurulum
 
-Entware'e SSH ile bağlan ve şunları çalıştır:
+Entware'e SSH ile bağlan (normal bir oturum aç; `ssh … 'komut'` biçiminde tek komut çalıştırma, o zaman PATH farklı olur) ve şunları çalıştır:
 
 ```sh
-# 1. HTTPS ile indirebilen wget (Entware'in kendi wget'i HTTPS desteklemez)
+# 1. HTTPS ile indirebilen wget. Keenetic'in Entware kurulumunda genelde hazır gelir;
+#    kuruluysa bu komut bir şey değiştirmez.
 opkg update
-opkg install wget-ssl
+opkg install wget-ssl ca-certificates
 
 # 2. gecit paket kaynağını ekle
 echo "src/gz gecit https://aliyusufergin.github.io/gecit/opkg" > /opt/etc/opkg/gecit.conf
@@ -98,6 +109,7 @@ Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; gecit birk
 | `EXCLUDE` | `/opt/etc/gecit/exclude.txt` | Hiçbir modda dokunulmayacak alan adları. |
 | `AUTO_LIST` | `/opt/etc/gecit/auto.txt` | `auto` modunun öğrendiği alan adları. |
 | `HTTP` | `yes` | Düz HTTP (port 80) isteklerini de ele al. |
+| `VERBOSE` | `no` | `yes`: her bağlantıyı sistem günlüğüne yaz (sorun giderme için; çok satır üretir). |
 | `TTL` | `3` | Sahte paketin router'dan çıkarken TTL'i. Kablonet'te 2 ve 3 çalışır. Daha yakın sunucular için kendiliğinden düşürülür. |
 | `FAKE_HOST` | `www.google.com` | Sahte paketteki site adı. |
 | `WAN` | `auto` | İnternet arayüzü. `auto`: varsayılan rotanın arayüzü (PPPoE'de `ppp0`). Boşlukla ayrılmış birden çok ad yazılabilir. |
@@ -133,7 +145,7 @@ Sunucuların kendi sıfırlamaları engel sayılmaz.
 /opt/etc/init.d/S51gecit check ornek.com …     # verdiğin alan adları
 ```
 
-Her alan adı için router'dan iki deneme yapar: **direct** (gecit'siz) ve **with gecit** (gecit'le, listede olmasa bile). Sonunda bir kontrol alan adı (`example.com`) vardır.
+Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (gecit'siz) ve **with gecit** (gecit'le, listede olmasa bile). Sonunda bir kontrol alan adı (`example.com`) vardır. Düz HTTP (port 80) engelleri bu komutla denenmez.
 
 | Sonuç | Anlamı |
 |---|---|
@@ -142,6 +154,8 @@ Her alan adı için router'dan iki deneme yapar: **direct** (gecit'siz) ve **wit
 | `blocked (block page)` | Engel sayfasına yönlendirildi (ör. Güvenli İnternet). |
 | `blocked (closed)` / `blocked (no answer)` | Bağlantı kapatıldı / cevap gelmedi. |
 | `no connection` | Sunucuya bağlanılamadı. Çoğunlukla DNS'in engel adresi verdiğini gösterir; bkz. [Gereksinimler](#gereksinimler) madde 2. |
+| `no DNS answer` | Alan adının adresi yok (ör. yalnızca alt alan adları kullanılıyor). |
+| `engine not running` | gecit çalışmıyor; `with gecit` denenmedi. `S51gecit start`. |
 | `(not listed)` / `(excluded)` | gecit normalde bu alan adına dokunmaz; `with gecit` sütunu yine de denemenin sonucudur. |
 
 `direct: blocked`, `with gecit: ok` = engel var ve gecit aşıyor.
@@ -165,8 +179,6 @@ opkg remove --autoremove gecit
 
 Bu; gecit'i durdurur, kurallarını ve yüklediği çekirdek modülünü kaldırır, `/opt/etc/gecit` klasörünü (ayarlar, listeler, öğrenilenler) ve paket kaynağı dosyasını (`/opt/etc/opkg/gecit.conf`) siler, gecit ile gelen `iptables` paketini de kaldırır. **Kendi listelerini saklamak istiyorsan önce yedekle.**
 
-`wget-ssl`'i yalnızca gecit için kurduysan: `opkg remove --autoremove wget-ssl`.
-
 Router'daki DNS ayarlarına gecit hiç dokunmaz; onları kendin değiştirdiysen öyle kalır.
 
 ## Sorun giderme
@@ -185,15 +197,17 @@ iptables -t mangle -S | grep gecit     # kurallar (iptables gecit ile birlikte k
 ```
 
 **Bir site açılmıyor.**
-1. `S51gecit check site.com` çalıştır.
+1. `/opt/etc/init.d/S51gecit check site.com` çalıştır.
    - `direct: ok`: site engelli değil; sorun başka yerde.
    - `no connection`: DNS sorunu (madde 2).
-   - `with gecit: blocked …`: gecit bu engeli aşamıyor. `TTL`'i 2, 4 veya 5 yapıp `restart` ve tekrar `check` dene. Sonuç değişmezse operatör farklı bir yöntem kullanıyor olabilir; lütfen bir issue aç.
+   - `with gecit: blocked …`: gecit bu engeli aşamıyor. `TTL`'i 2, 4 veya 5 yapıp `restart` ve tekrar `check` dene. Sonuç değişmezse operatör farklı bir yöntem kullanıyor olabilir; lütfen [bir issue aç](https://github.com/aliyusufergin/gecit/issues) ve `check` çıktısını, operatörünü ve denediğin `TTL` değerlerini ekle.
 2. `auto` moddaysan sayfayı bir kez yenile; ilk deneme öğrenme içindir. Kendin de `lists/user.txt`'ye ekleyebilirsin.
 
 **Bir site gecit ile bozuldu.** Alan adını `exclude.txt`'ye yaz.
 
 **gecit'i geçici olarak kapatmak.** `/opt/etc/init.d/S51gecit stop` (açılışta yine başlar). Kalıcı olarak kapatmak için `ENABLED=no`.
+
+**Ayrıntılı günlük.** `VERBOSE=yes` yapıp `restart`: gecit her bağlantıda ne yaptığını (sahte paket gönderdi mi, hangi TTL ile, sıfırlama geldi mi) günlüğe yazar. İşin bitince `no` yap.
 
 **Ayar hatası.** `gecit validate` hatanın satırını söyler:
 
@@ -222,7 +236,9 @@ Kendi operatöründe denediysen, sonucu (`check` çıktısı ve kullandığın `
 | `aarch64-3.10` | Test edildi (Keenetic Hopper KN-3811, KeeneticOS 5.1). |
 | `mipsel-3.4` | Paket derleniyor, **test edilmedi**. |
 
-Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) Netfilter bileşeniyle gelir.
+Big-endian `mips` için paket yok.
+
+Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) KN-3811'de Netfilter bileşeniyle geliyor; gecit yüklü değillerse kendisi yükler, bulamazsa günlüğe yazar.
 
 ## Sınırlar
 
@@ -233,6 +249,10 @@ Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) Netfilt
 - Router'a ~3 ms'den yakın engelli sunucular `auto` modda öğrenilemez; onları listeye kendin ekle.
 - Kaldırma, `/opt/etc/gecit` altındaki her şeyi siler.
 
+## Sorumluluk
+
+gecit, erişimi kısıtlanan içeriğe ulaşmak için kullanılabilecek bir ağ aracıdır. Kullanımının yasal sonuçları kullanıcıya aittir; yazılım "olduğu gibi", hiçbir garanti olmadan sunulur (bkz. lisanslar).
+
 ## Geliştirme
 
 ```sh
@@ -240,6 +260,8 @@ docker/build.sh test                                                  # birim te
 docker/build.sh build --release --target aarch64-unknown-linux-musl   # router için ikili
 tools/mkipk.sh                                                        # dist/gecit_<sürüm>_aarch64-3.10.ipk
 ```
+
+Sürüm yayınlama: [RELEASING.md](RELEASING.md).
 
 Kod düzeni: `src/engine.rs` (paket işleme, öğrenme), `src/supervise.rs` (bekçi), `src/check.rs`, `files/rules.sh` (netfilter kuralları), `files/S51gecit` (servis), `files/50-gecit.sh` (NDM kancası).
 

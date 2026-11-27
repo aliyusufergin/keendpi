@@ -25,6 +25,8 @@ jobs:
           - target: mipsel-unknown-linux-musl
             arch: mipsel-3.4
             tier: nightly
+    # The untested mipsel build must never hold back the tested aarch64 release.
+    continue-on-error: ${{ matrix.tier == 'nightly' }}
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain (stable)
@@ -56,35 +58,43 @@ jobs:
           name: ipk-${{ matrix.arch }}
           path: dist/*.ipk
 
-  # On a version tag: a GitHub release with the packages, and the opkg feed on GitHub Pages.
+  # On a version tag: a GitHub release with the packages, and the opkg feed on the gh-pages branch
+  # (GitHub Pages serves that branch; see RELEASING.md for the one-time setup).
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
     steps:
       - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        run: |
+          v=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but Cargo.toml says $v"; exit 1; }
       - uses: actions/download-artifact@v4
         with:
           pattern: ipk-*
           merge-multiple: true
           path: dist
-      - name: Release
+      - name: Release (re-runnable)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.ipk --title "gecit $GITHUB_REF_NAME" --notes-file CHANGELOG.md --verify-tag
-      - name: Feed
+        run: |
+          ls dist/*.ipk
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "gecit $GITHUB_REF_NAME" --notes-file CHANGELOG.md --verify-tag
+          gh release upload "$GITHUB_REF_NAME" dist/*.ipk --clobber
+      - name: Feed to gh-pages
         run: |
           tools/mkfeed.sh site/opkg dist/*.ipk
           printf '<!doctype html><meta charset="utf-8"><title>gecit opkg feed</title><p>opkg feed for <a href="https://github.com/%s">gecit</a>: <code>src/gz gecit https://%s.github.io/%s/opkg</code></p>\n' \
-            "$GITHUB_REPOSITORY" "${GITHUB_REPOSITORY_OWNER}" "${GITHUB_REPOSITORY#*/}" > site/index.html
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - uses: actions/deploy-pages@v4
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_OWNER" "${GITHUB_REPOSITORY#*/}" > site/index.html
+          touch site/.nojekyll
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "feed for $GITHUB_REF_NAME"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY.git" gh-pages

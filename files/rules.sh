@@ -87,10 +87,11 @@ add_locked() {
     retry_later
     return 3
   fi
-  for m in xt_u32; do
+  # The queue modules are usually loaded already; xt_u32 usually is not.
+  for m in nfnetlink_queue xt_NFQUEUE xt_u32; do
     grep -q "^$m " /proc/modules && continue
     p=$(modpath $m)
-    [ -n "$p" ] || { say "kernel module $m not found"; return 1; }
+    [ -n "$p" ] || { say "kernel module $m not found (install the Netfilter kernel modules component)"; return 1; }
     if insmod "$p" 2>/dev/null; then
       echo $m >> $MODMARK
     else

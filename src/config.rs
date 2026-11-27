@@ -32,6 +32,8 @@ pub struct Config {
     /// Read by the scripts: whether the service starts, and the WAN interface(s).
     pub enabled: bool,
     pub wan: String,
+    /// Log every handled connection (troubleshooting).
+    pub verbose: bool,
 }
 
 pub const DEFAULT_PATH: &str = "/opt/etc/gecit/gecit.conf";
@@ -51,6 +53,7 @@ impl Default for Config {
             http: true,
             enabled: true,
             wan: "auto".into(),
+            verbose: false,
         }
     }
 }
@@ -114,6 +117,7 @@ impl Config {
                 "EXCLUDE" => c.exclude = paths(v),
                 "AUTO_LIST" => c.auto_list = v.into(),
                 "HTTP" => c.http = yes_no(v).ok_or_else(|| err(format!("HTTP must be yes or no, not {v:?}")))?,
+                "VERBOSE" => c.verbose = yes_no(v).ok_or_else(|| err(format!("VERBOSE must be yes or no, not {v:?}")))?,
                 "ENABLED" => c.enabled = yes_no(v).ok_or_else(|| err(format!("ENABLED must be yes or no, not {v:?}")))?,
                 "WAN" => {
                     if v.is_empty() || !v.split_whitespace().all(|i| i.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-+".contains(&b))) {
@@ -140,8 +144,9 @@ impl Config {
     /// source the file themselves, so both sides read it the same way (CRLF, spaces, quotes).
     pub fn shell_vars(&self) -> String {
         format!(
-            "ENABLED={}\nWAN='{}'\nQUEUE={}\nMARK={:#x}\nHTTP={}\nLEARN={}\n",
+            "ENABLED={}\nVERBOSE={}\nWAN='{}'\nQUEUE={}\nMARK={:#x}\nHTTP={}\nLEARN={}\n",
             if self.enabled { "yes" } else { "no" },
+            if self.verbose { "yes" } else { "no" },
             self.wan,
             self.queue,
             self.mark,

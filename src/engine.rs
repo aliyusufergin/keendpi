@@ -1,6 +1,6 @@
 //! The worker: reads queued packets, sends fakes ahead of blocked requests, learns blocked domains.
 //!
-//! Packets it receives (see the rules in tools/devrun.sh):
+//! Packets it receives (see the rules in files/rules.sh):
 //! - outgoing first segments of TLS ClientHellos and HTTP requests (mangle POSTROUTING);
 //! - incoming SYN-ACKs from those ports, to measure the server's hop distance;
 //! - incoming RSTs from those ports, and plain-HTTP answers on port 443: the block signals that

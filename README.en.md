@@ -25,6 +25,7 @@
 - [ISPs](#isps)
 - [Models](#models)
 - [Limits](#limits)
+- [Disclaimer](#disclaimer)
 - [Development](#development)
 - [Licence](#licence)
 
@@ -42,7 +43,8 @@ gecit sends a **fake first packet** just before the real first packet of a conne
 
 1. **OPKG and Entware.** In the Keenetic web interface, under the component options of the general system settings, these components must be installed:
    - **OPKG package manager**,
-   - **Netfilter subsystem kernel modules**.
+   - **Netfilter subsystem kernel modules**,
+   - **DNS-over-TLS proxy** and/or **DNS-over-HTTPS proxy** (for item 2).
 
    Entware must be installed on a USB drive (search for "Entware" on help.keenetic.com for the official guide). You need SSH access to Entware (usually `ssh root@192.168.1.1 -p 222`).
 
@@ -51,18 +53,27 @@ gecit sends a **fake first packet** just before the real first packet of a conne
    - remove plain DNS servers, and turn on **ignore the provider's DNS** in the internet connection settings;
    - if DHCP hands a separate DNS server to devices (e.g. `1.1.1.1`), remove it so devices use the router.
 
+   The same can be done from Entware with the Keenetic command line (`ndmc`):
+
+   ```sh
+   ndmc -c "dns-proxy tls upstream 1.1.1.1 853 sni cloudflare-dns.com"
+   ndmc -c "no ip name-server 1.1.1.1"           # if present, for each plain DNS server
+   ndmc -c "copy running-config startup-config"  # save permanently
+   ```
+
    To verify: on Entware, `nslookup discord.com` must give a real address (`162.159.x.x`), not a block address such as `195.175.254.2`.
 
 3. No other DPI tool (zapret, nfqws, ByeDPI, …) may **run** on the router; they work on the same packets.
 
 ## Install
 
-Connect to Entware over SSH and run:
+Connect to Entware over SSH (open a normal session; running a single command as `ssh … 'command'` gives a different PATH) and run:
 
 ```sh
-# 1. A wget that can do HTTPS (Entware's own wget cannot)
+# 1. A wget that can do HTTPS. Keenetic's Entware install usually has it already;
+#    if so, this changes nothing.
 opkg update
-opkg install wget-ssl
+opkg install wget-ssl ca-certificates
 
 # 2. Add the gecit package feed
 echo "src/gz gecit https://aliyusufergin.github.io/gecit/opkg" > /opt/etc/opkg/gecit.conf
@@ -98,6 +109,7 @@ Changes to list files need no restart; gecit reads them again within seconds.
 | `EXCLUDE` | `/opt/etc/gecit/exclude.txt` | Domains never touched, in any mode. |
 | `AUTO_LIST` | `/opt/etc/gecit/auto.txt` | Domains learned in `auto` mode. |
 | `HTTP` | `yes` | Also handle plain HTTP (port 80) requests. |
+| `VERBOSE` | `no` | `yes`: log every connection to the system log (for troubleshooting; many lines). |
 | `TTL` | `3` | TTL of the fake packet as it leaves the router. On Kablonet 2 and 3 work. Lowered automatically for closer servers. |
 | `FAKE_HOST` | `www.google.com` | The site name in the fake packet. |
 | `WAN` | `auto` | Internet interface. `auto`: the default route's interface (`ppp0` on PPPoE). Several names can be given, separated by spaces. |
@@ -133,7 +145,7 @@ Servers' own resets don't count.
 /opt/etc/init.d/S51gecit check example.org …     # the domains you give
 ```
 
-For each domain it makes two attempts from the router: **direct** (without gecit) and **with gecit** (even if not listed). A control domain (`example.com`) comes last.
+For each domain it makes two HTTPS (port 443) attempts from the router: **direct** (without gecit) and **with gecit** (even if not listed). A control domain (`example.com`) comes last. Plain-HTTP (port 80) blocks are not tested by this command.
 
 | Result | Meaning |
 |---|---|
@@ -142,6 +154,8 @@ For each domain it makes two attempts from the router: **direct** (without gecit
 | `blocked (block page)` | Redirected to a block page (e.g. Güvenli İnternet). |
 | `blocked (closed)` / `blocked (no answer)` | The connection was closed / nothing came back. |
 | `no connection` | Could not connect to the server. Usually DNS is giving a block address; see [Requirements](#requirements) item 2. |
+| `no DNS answer` | The domain has no address (e.g. only its subdomains are used). |
+| `engine not running` | gecit isn't running, so `with gecit` was not tried. Run `S51gecit start`. |
 | `(not listed)` / `(excluded)` | gecit would normally leave this domain alone; the `with gecit` column still shows the attempt. |
 
 `direct: blocked`, `with gecit: ok` means the block is there and gecit gets past it.
@@ -171,8 +185,6 @@ This stops gecit and removes:
 
 **Back up your own lists first if you want to keep them.**
 
-If you installed `wget-ssl` only for gecit, also run `opkg remove --autoremove wget-ssl`.
-
 gecit never touches the router's DNS settings; if you changed them yourself, they stay as they are.
 
 ## Troubleshooting
@@ -191,15 +203,17 @@ iptables -t mangle -S | grep gecit     # the rules (iptables comes with gecit)
 ```
 
 **A site doesn't open.**
-1. Run `S51gecit check site.com`.
+1. Run `/opt/etc/init.d/S51gecit check site.com`.
    - `direct: ok`: the site isn't blocked; the problem is elsewhere.
    - `no connection`: a DNS problem (item 2 of [Requirements](#requirements)).
-   - `with gecit: blocked …`: gecit can't get past this block. Set `TTL` to 2, 4 or 5, `restart`, and `check` again. If nothing changes, the ISP may use a different method; please open an issue.
+   - `with gecit: blocked …`: gecit can't get past this block. Set `TTL` to 2, 4 or 5, `restart`, and `check` again. If nothing changes, the ISP may use a different method; please [open an issue](https://github.com/aliyusufergin/gecit/issues) with the `check` output, your ISP and the `TTL` values you tried.
 2. In `auto` mode, reload the page once; the first attempt is for learning. You can also add the site to `lists/user.txt` yourself.
 
 **A site breaks with gecit.** Put the domain in `exclude.txt`.
 
 **Turning gecit off for a while.** `/opt/etc/init.d/S51gecit stop` (it starts again at boot). To keep it off, set `ENABLED=no`.
+
+**Verbose log.** Set `VERBOSE=yes` and `restart`: gecit logs what it did for each connection (whether it sent a fake, with which TTL, whether a reset came). Set it back to `no` when done.
 
 **Configuration error.** `gecit validate` names the line:
 
@@ -228,7 +242,9 @@ Look at the output of `opkg print-architecture`:
 | `aarch64-3.10` | Tested (Keenetic Hopper KN-3811, KeeneticOS 5.1). |
 | `mipsel-3.4` | The package builds; **untested**. |
 
-The kernel modules needed (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) come with the Netfilter component.
+There is no package for big-endian `mips`.
+
+On the KN-3811 the kernel modules needed (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) come with the Netfilter component; gecit loads them if they aren't loaded, and logs it if it can't find them.
 
 ## Limits
 
@@ -239,6 +255,10 @@ The kernel modules needed (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) come with 
 - Blocked servers closer than ~3 ms to the router can't be learned in `auto` mode; add them to a list yourself.
 - Uninstalling deletes everything under `/opt/etc/gecit`.
 
+## Disclaimer
+
+gecit is a network tool that can be used to reach content whose access is restricted. Any legal consequences of using it are the user's own. The software is provided "as is", without warranty of any kind (see the licences).
+
 ## Development
 
 ```sh
@@ -246,6 +266,8 @@ docker/build.sh test                                                  # unit tes
 docker/build.sh build --release --target aarch64-unknown-linux-musl   # router binary
 tools/mkipk.sh                                                        # dist/gecit_<version>_aarch64-3.10.ipk
 ```
+
+Releasing: [RELEASING.md](RELEASING.md).
 
 Layout:
 

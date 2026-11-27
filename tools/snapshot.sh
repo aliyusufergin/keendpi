@@ -1,6 +1,6 @@
 #!/bin/sh
 # Print a snapshot of router state relevant to install/uninstall residue checks.
-# Run on the router: ssh keenetic-entware sh -s < tools/snapshot.sh > snap.txt
+# Run on the router: ssh root@ROUTER -p 222 sh -s < tools/snapshot.sh > snap.txt
 sec() { echo "=== $1"; }
 sec files;   find /opt -xdev \( -path /opt/var/run -o -path /opt/tmp -o -path /opt/var/log -o -path /opt/var/opkg-lists \) -prune -o -type f -print 2>/dev/null | sort | while read f; do md5sum "$f"; done
 echo "--- /opt/tmp entries"; ls -a /opt/tmp 2>/dev/null
