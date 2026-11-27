@@ -1,16 +1,16 @@
 #!/bin/sh
-# gecit service: start|stop|restart|status|check [DOMAIN...]
+# keendpi service: start|stop|restart|status|check [DOMAIN...]
 PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:/usr/sbin:/usr/bin:/sbin:/bin
-CONF=/opt/etc/gecit/gecit.conf
-BIN=/opt/sbin/gecit
-RULES=/opt/share/gecit/rules.sh
+CONF=/opt/etc/keendpi/keendpi.conf
+BIN=/opt/sbin/keendpi
+RULES=/opt/share/keendpi/rules.sh
 # In RAM: a power cut can't leave a stale pid behind for the next boot.
-PIDF=/tmp/gecit.pid
+PIDF=/tmp/keendpi.pid
 # Keenetic keeps the time zone as a POSIX string in /etc/TZ, which the static binary only reads via $TZ.
 [ -z "$TZ" ] && [ -r /etc/TZ ] && export TZ="$(cat /etc/TZ)"
-export GECIT_CONF=$CONF
+export KEENDPI_CONF=$CONF
 
-say() { echo "gecit: $*"; logger -t gecit "$*" 2>/dev/null; }
+say() { echo "keendpi: $*"; logger -t keendpi "$*" 2>/dev/null; }
 
 # Our supervisor, not just any process that happens to have the recorded pid.
 running() {
@@ -20,7 +20,7 @@ running() {
 }
 
 start() {
-  running && { echo "gecit is already running"; return 0; }
+  running && { echo "keendpi is already running"; return 0; }
   out=$($BIN validate -c $CONF 2>&1) || { say "not started: $out"; return 1; }
   eval "$($BIN shellvars -c $CONF)"
   [ "$ENABLED" = no ] && { say "not started: ENABLED=no in $CONF"; return 0; }
@@ -49,7 +49,7 @@ stop() {
     for i in 1 2 3 4 5 6; do kill -0 "$p" 2>/dev/null || break; sleep 1; done
     kill -0 "$p" 2>/dev/null && kill -9 "$p"
   fi
-  echo "gecit stopped"
+  echo "keendpi stopped"
 }
 
 case "$1" in
@@ -57,7 +57,7 @@ case "$1" in
   stop) stop ;;
   restart) stop; start ;;
   status)
-    if running; then echo "gecit is running (pid $(cat $PIDF))"; else echo "gecit is not running"; exit 1; fi ;;
+    if running; then echo "keendpi is running (pid $(cat $PIDF))"; else echo "keendpi is not running"; exit 1; fi ;;
   check) shift; $BIN check -c $CONF "$@" ;;
   *) echo "usage: $0 start|stop|restart|status|check [DOMAIN...]"; exit 2 ;;
 esac

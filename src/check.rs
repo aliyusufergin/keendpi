@@ -1,10 +1,10 @@
-//! `gecit check`: for each domain, is it blocked, and does the bypass get it through?
+//! `keendpi check`: for each domain, is it blocked, and does the bypass get it through?
 //!
 //! Both probes run from the router itself. Each opens a TCP connection to port 443 and sends a
 //! ClientHello for the domain; any reply from the server (ServerHello or alert) means it got
 //! through, while a reset, a close or silence means it was blocked.
 //! - direct: the socket carries MARK, so the rules skip it and the engine never sees it;
-//! - via gecit: the socket carries FORCE_MARK, so the engine sends its fake whatever the lists say.
+//! - via keendpi: the socket carries FORCE_MARK, so the engine sends its fake whatever the lists say.
 //! TLS only: plain-HTTP blocks are not probed. A plain-HTTP answer counts as a block page (Kablonet's
 //! "Güvenli İnternet" filter answers so); any other reply counts as the server.
 
@@ -135,7 +135,7 @@ pub fn run(cfg: &Config, domains: Vec<String>) -> Result<(), String> {
     }
 
     println!(
-        "gecit {}: mode {:?}, {}; engine {}",
+        "keendpi {}: mode {:?}, {}; engine {}",
         env!("CARGO_PKG_VERSION"),
         cfg.mode,
         lists.summary(),
@@ -161,7 +161,7 @@ pub fn run(cfg: &Config, domains: Vec<String>) -> Result<(), String> {
     }
 
     let w = rows.iter().map(|r| r.name.len() + if r.note.is_empty() { 0 } else { r.note.len() + 3 }).max().unwrap_or(10).max(6);
-    println!("{:w$}  {:15}  {:20}  {}", "domain", "address", "direct", "with gecit");
+    println!("{:w$}  {:15}  {:20}  {}", "domain", "address", "direct", "with keendpi");
     for r in &rows {
         let label = if r.note.is_empty() { r.name.clone() } else { format!("{} ({})", r.name, r.note) };
         let addr = r.addr.map(|a| a.to_string()).unwrap_or_else(|| "no DNS answer".into());
@@ -176,7 +176,7 @@ pub fn run(cfg: &Config, domains: Vec<String>) -> Result<(), String> {
     if rows.iter().any(|r| r.direct == Some(Outcome::NoConnect) && r.via != Some(Outcome::Ok)) {
         println!(
             "\n\"no connection\" usually means the DNS answer is the ISP's block address, not the site.\n\
-             gecit does not fix DNS: use DNS-over-HTTPS/TLS on the router and remove plain DNS servers."
+             keendpi does not fix DNS: use DNS-over-HTTPS/TLS on the router and remove plain DNS servers."
         );
     }
     Ok(())

@@ -1,4 +1,4 @@
-//! gecit: NFQUEUE DPI-circumvention engine for Keenetic routers.
+//! keendpi: NFQUEUE DPI-circumvention engine for Keenetic routers.
 //!
 //! For a TLS ClientHello or HTTP request to a blocked domain, send one fake request (harmless
 //! name, TTL too low to reach the server) at the same sequence number, then accept the
@@ -26,13 +26,13 @@ macro_rules! log {
 }
 
 const USAGE: &str = "usage:
-  gecit run      [-c FILE] [-v] [--syslog]  run the service (supervises the worker)
-  gecit check    [-c FILE] [DOMAIN...]      test each listed (or given) domain, direct and with gecit
-  gecit validate [-c FILE]                  check the configuration and lists, then exit
-  gecit shellvars [-c FILE]                 print the settings the scripts use (KEY='value')
-  gecit version
+  keendpi run      [-c FILE] [-v] [--syslog]  run the service (supervises the worker)
+  keendpi check    [-c FILE] [DOMAIN...]      test each listed (or given) domain, direct and with keendpi
+  keendpi validate [-c FILE]                  check the configuration and lists, then exit
+  keendpi shellvars [-c FILE]                 print the settings the scripts use (KEY='value')
+  keendpi version
 options:
-  -c FILE    configuration file (default /opt/etc/gecit/gecit.conf)
+  -c FILE    configuration file (default /opt/etc/keendpi/keendpi.conf)
   -v         log every handled connection
   --syslog   log to the system log instead of stderr";
 
@@ -71,7 +71,7 @@ fn main() -> ExitCode {
     };
     if a.syslog {
         if let Err(e) = logging::use_syslog() {
-            log!("gecit: /dev/log: {e}; logging to stderr");
+            log!("keendpi: /dev/log: {e}; logging to stderr");
         }
     }
     let r = match a.cmd.as_str() {
@@ -85,7 +85,7 @@ fn main() -> ExitCode {
             .and_then(|e| e.run().map_err(|e| e.to_string())),
         "check" => config::Config::load(&a.conf).and_then(|c| check::run(&c, a.rest)),
         "version" | "--version" | "-V" => {
-            println!("gecit {}", env!("CARGO_PKG_VERSION"));
+            println!("keendpi {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         "-h" | "--help" | "help" => {
@@ -97,7 +97,7 @@ fn main() -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            log!("gecit: {e}");
+            log!("keendpi: {e}");
             ExitCode::FAILURE
         }
     }

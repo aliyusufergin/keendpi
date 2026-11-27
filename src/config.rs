@@ -36,7 +36,7 @@ pub struct Config {
     pub verbose: bool,
 }
 
-pub const DEFAULT_PATH: &str = "/opt/etc/gecit/gecit.conf";
+pub const DEFAULT_PATH: &str = "/opt/etc/keendpi/keendpi.conf";
 
 impl Default for Config {
     fn default() -> Self {
@@ -47,9 +47,9 @@ impl Default for Config {
             force_mark: 0x2000_0000,
             ttl: 3,
             fake_host: "www.google.com".into(),
-            lists: vec!["/opt/etc/gecit/lists".into()],
-            exclude: vec!["/opt/etc/gecit/exclude.txt".into()],
-            auto_list: "/opt/etc/gecit/auto.txt".into(),
+            lists: vec!["/opt/etc/keendpi/lists".into()],
+            exclude: vec!["/opt/etc/keendpi/exclude.txt".into()],
+            auto_list: "/opt/etc/keendpi/auto.txt".into(),
             http: true,
             enabled: true,
             wan: "auto".into(),

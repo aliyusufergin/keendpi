@@ -126,7 +126,7 @@ fn disk_thread(cfg: Config, learned: Receiver<String>, lists: Sender<Lists>) {
             Ok(name) => {
                 in_file.insert(name.as_bytes());
                 if let Err(e) = hostlist::append(&cfg.auto_list, &name) {
-                    log!("gecit: {}: {e}", cfg.auto_list.display());
+                    log!("keendpi: {}: {e}", cfg.auto_list.display());
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -138,13 +138,13 @@ fn disk_thread(cfg: Config, learned: Receiver<String>, lists: Sender<Lists>) {
             match Lists::load(&cfg) {
                 Ok(l) => {
                     in_file = l.auto.clone();
-                    log!("gecit: lists reloaded: {}", l.summary());
+                    log!("keendpi: lists reloaded: {}", l.summary());
                     if lists.send(l).is_err() {
                         return;
                     }
                 }
                 // Keep the old lists; try again when the files change again.
-                Err(e) => log!("gecit: lists not reloaded: {e}"),
+                Err(e) => log!("keendpi: lists not reloaded: {e}"),
             }
         }
     }
@@ -207,7 +207,7 @@ impl Engine {
         nfq.set_queue_max_len(q, 64)?;
         nfq.set_copy_range(q, 4096)?;
         log!(
-            "gecit: worker on queue {q}, mode {:?}, ttl {}, {}",
+            "keendpi: worker on queue {q}, mode {:?}, ttl {}, {}",
             self.cfg.mode,
             self.cfg.ttl,
             self.lists.summary()
@@ -223,7 +223,7 @@ impl Engine {
             self.handle(msg.get_payload(), msg.get_nfmark(), msg.get_hook(), now);
             msg.set_verdict(nfq::Verdict::Accept);
             if let Err(e) = nfq.verdict(msg) {
-                log!("gecit: verdict: {e}");
+                log!("keendpi: verdict: {e}");
             }
             self.housekeeping(now);
         }
@@ -309,7 +309,7 @@ impl Engine {
             };
             if ttl == 0 {
                 if self.verbose {
-                    log!("gecit: {} -> {} is {} hop(s) away, no room for a fake", shown(), t.dst(), hops.unwrap_or(0));
+                    log!("keendpi: {} -> {} is {} hop(s) away, no room for a fake", shown(), t.dst(), hops.unwrap_or(0));
                 }
             } else {
                 let payload = if is_tls {
@@ -324,7 +324,7 @@ impl Engine {
                 }
                 if self.verbose || (r.is_err() && (self.send_errors <= 5 || self.send_errors % 1000 == 0)) {
                     log!(
-                        "gecit: {} -> {}:{} fake ttl {} (hops {:?}{}): {:?}",
+                        "keendpi: {} -> {}:{} fake ttl {} (hops {:?}{}): {:?}",
                         shown(),
                         t.dst(),
                         t.dport(),
@@ -336,7 +336,7 @@ impl Engine {
                 }
             }
         } else if self.verbose {
-            log!("gecit: {} -> {}:{} passed", shown(), t.dst(), t.dport());
+            log!("keendpi: {} -> {}:{} passed", shown(), t.dst(), t.dport());
         }
         if let Some(f) = self.flows.get_mut(&key) {
             f.request = Some((now, name.map(|n| String::from_utf8_lossy(n).into_owned()), faked));
@@ -355,7 +355,7 @@ impl Engine {
             self.resets_after_fake += 1;
             if self.verbose || self.resets_after_fake <= 5 || self.resets_after_fake % 100 == 0 {
                 let what = if redirect { "redirected" } else { "reset" };
-                log!("gecit: {name} {what} despite the fake ({} so far)", self.resets_after_fake);
+                log!("keendpi: {name} {what} despite the fake ({} so far)", self.resets_after_fake);
             }
             return;
         }
@@ -365,12 +365,12 @@ impl Engine {
         let delay = now.duration_since(at);
         let injected = redirect || flow.rtt.is_some_and(|rtt| injected(delay, rtt));
         if self.verbose && redirect {
-            log!("gecit: {name} redirected to a block page");
+            log!("keendpi: {name} redirected to a block page");
         } else if self.verbose {
             // Short: the Keenetic log view cuts lines at ~80 characters.
             let rtt = flow.rtt.map_or("?".into(), |r| format!("{:.1}", r.as_secs_f64() * 1e3));
             let what = if injected { "block" } else { "not a block" };
-            log!("gecit: reset {name} after {:.1} ms, rtt {rtt} ms: {what}", delay.as_secs_f64() * 1e3);
+            log!("keendpi: reset {name} after {:.1} ms, rtt {rtt} ms: {what}", delay.as_secs_f64() * 1e3);
         }
         if !injected {
             return;
@@ -383,13 +383,13 @@ impl Engine {
         }
         if self.lists.auto.len() >= MAX_LEARNED {
             if !self.learn_full_logged {
-                log!("gecit: {} holds {MAX_LEARNED} domains, not learning more", self.cfg.auto_list.display());
+                log!("keendpi: {} holds {MAX_LEARNED} domains, not learning more", self.cfg.auto_list.display());
                 self.learn_full_logged = true;
             }
             return;
         }
         self.lists.auto.insert(name.as_bytes());
-        log!("gecit: learned {name}");
+        log!("keendpi: learned {name}");
         let _ = self.learned_tx.send(name);
     }
 

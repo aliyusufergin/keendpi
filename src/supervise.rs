@@ -86,7 +86,7 @@ fn reap(child: &mut Child) {
             return;
         }
         if !logged && t.elapsed() > Duration::from_secs(3) {
-            log!("gecit: worker does not die (stuck in the kernel?); waiting for it");
+            log!("keendpi: worker does not die (stuck in the kernel?); waiting for it");
             logged = true;
         }
         std::thread::sleep(Duration::from_millis(50));
@@ -109,7 +109,7 @@ pub fn run(cfg_path: &str, verbose: bool) -> Result<(), String> {
     // Check config and lists here, so a mistake is reported once instead of as a restart loop.
     let cfg = Config::load(cfg_path)?;
     let lists = Lists::load(&cfg)?;
-    log!("gecit {}: mode {:?}, {}", env!("CARGO_PKG_VERSION"), cfg.mode, lists.summary());
+    log!("keendpi {}: mode {:?}, {}", env!("CARGO_PKG_VERSION"), cfg.mode, lists.summary());
     drop(lists);
     if queue_stats(cfg.queue).is_some() {
         return Err(format!("queue {} is already in use by another process", cfg.queue));
@@ -131,16 +131,16 @@ pub fn run(cfg_path: &str, verbose: bool) -> Result<(), String> {
             std::thread::sleep(TICK);
             if STOP.load(Ordering::Relaxed) {
                 stop_child(&mut child);
-                log!("gecit: stopped");
+                log!("keendpi: stopped");
                 return Ok(());
             }
             match child.try_wait() {
                 Ok(Some(st)) => {
-                    log!("gecit: worker {st}");
+                    log!("keendpi: worker {st}");
                     break false;
                 }
                 Ok(None) => {}
-                Err(e) => log!("gecit: wait: {e}"),
+                Err(e) => log!("keendpi: wait: {e}"),
             }
             let now = queue_stats(cfg.queue);
             stuck = match (last, now) {
@@ -149,7 +149,7 @@ pub fn run(cfg_path: &str, verbose: bool) -> Result<(), String> {
             };
             last = now;
             if stuck >= STUCK_TICKS {
-                log!("gecit: worker not taking packets ({} waiting), restarting it", now.map_or(0, |n| n.0));
+                log!("keendpi: worker not taking packets ({} waiting), restarting it", now.map_or(0, |n| n.0));
                 kill(&mut child, libc::SIGKILL);
                 reap(&mut child);
                 break true;
@@ -164,7 +164,7 @@ pub fn run(cfg_path: &str, verbose: bool) -> Result<(), String> {
             let until = Instant::now() + backoff;
             while Instant::now() < until {
                 if STOP.load(Ordering::Relaxed) {
-                    log!("gecit: stopped");
+                    log!("keendpi: stopped");
                     return Ok(());
                 }
                 std::thread::sleep(TICK);

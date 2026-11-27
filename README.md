@@ -1,4 +1,4 @@
-# gecit
+# keendpi
 
 **Keenetic router'lar için DPI engeli aşma aracı.** Discord, SNI/HTTP ile engellenen siteler ve "Güvenli İnternet" filtresi, ağdaki **bütün cihazlarda** (telefon, TV, konsol, misafirler), cihazlarda hiçbir ayar yapmadan açılır. VPN değildir; trafiğin başka bir sunucudan geçmez.
 
@@ -33,11 +33,11 @@
 
 Operatörün DPI cihazı, HTTPS bağlantısının ilk paketindeki (TLS ClientHello) site adına (SNI) bakar ve engelli bir site görürse bağlantıyı keser ya da engel sayfasına yönlendirir.
 
-gecit, engelli bir siteye giden bağlantının ilk paketinden hemen önce **sahte bir ilk paket** gönderir. Sahte pakette zararsız bir site adı (`www.google.com`) vardır ve TTL değeri, paket DPI cihazını geçtikten sonra yolda ölecek kadar düşüktür. DPI sahte paketi görür, bağlantıyı serbest bırakır; sahte paket sunucuya hiç ulaşmaz. Gerçek paket olduğu gibi gider. Düz HTTP (port 80) için de aynısını yapar.
+keendpi, engelli bir siteye giden bağlantının ilk paketinden hemen önce **sahte bir ilk paket** gönderir. Sahte pakette zararsız bir site adı (`www.google.com`) vardır ve TTL değeri, paket DPI cihazını geçtikten sonra yolda ölecek kadar düşüktür. DPI sahte paketi görür, bağlantıyı serbest bırakır; sahte paket sunucuya hiç ulaşmaz. Gerçek paket olduğu gibi gider. Düz HTTP (port 80) için de aynısını yapar.
 
-- Hangi bağlantılara uygulanacağını listeler belirler (`auto` modda gecit engelli siteleri kendisi de öğrenir).
+- Hangi bağlantılara uygulanacağını listeler belirler (`auto` modda keendpi engelli siteleri kendisi de öğrenir).
 - Sunucunun kaç adım uzakta olduğunu ölçer ve sahte paketin sunucuya asla ulaşmayacağı bir TTL seçer.
-- Hiçbir veri router dışına gönderilmez; gecit kimseye bağlanmaz, telemetri yoktur.
+- Hiçbir veri router dışına gönderilmez; keendpi kimseye bağlanmaz, telemetri yoktur.
 
 ## Gereksinimler
 
@@ -48,7 +48,7 @@ gecit, engelli bir siteye giden bağlantının ilk paketinden hemen önce **saht
 
    Entware bir USB belleğe kurulu olmalı (help.keenetic.com'da "Entware" diye aratınca çıkan resmi rehber). Entware'e SSH ile bağlanabilmelisin (genellikle `ssh root@192.168.1.1 -p 222`).
 
-2. **Şifreli DNS (DoH/DoT).** Operatörler engelli siteler için DNS'te de yanlış adres verir. Kablonet düz DNS sorgularını (1.1.1.1 ve 8.8.8.8 dahil) yolda yakalayıp engel sayfası adresini döndürür. gecit DNS'e dokunmaz. Keenetic'te (menü adları sürüme göre değişebilir):
+2. **Şifreli DNS (DoH/DoT).** Operatörler engelli siteler için DNS'te de yanlış adres verir. Kablonet düz DNS sorgularını (1.1.1.1 ve 8.8.8.8 dahil) yolda yakalayıp engel sayfası adresini döndürür. keendpi DNS'e dokunmaz. Keenetic'te (menü adları sürüme göre değişebilir):
    - İnternet güvenliği / DNS yapılandırması bölümünden bir **DNS-over-TLS** veya **DNS-over-HTTPS** sunucusu ekle (ör. `1.1.1.1:853`, SNI `cloudflare-dns.com`),
    - düz DNS sunucularını kaldır; internet bağlantısının ayarlarında **sağlayıcının DNS'ini yok say** seçeneğini aç,
    - cihazlara DHCP ile ayrıca DNS sunucusu dağıtıyorsan (ör. `1.1.1.1`), onu da kaldır ki cihazlar router'ı kullansın.
@@ -71,43 +71,43 @@ Entware'e SSH ile bağlan (normal bir oturum aç; `ssh … 'komut'` biçiminde t
 
 ```sh
 # 1. HTTPS ile indirebilen wget. Keenetic'in Entware kurulumunda genelde hazır gelir;
-#    kuruluysa bu komut bir şey değiştirmez.
+#    yalnızca yoksa kurulur (kuruluysa opkg install onu güncellerdi).
 opkg update
-opkg install wget-ssl ca-certificates
+opkg list-installed | grep -q '^wget-ssl ' || opkg install wget-ssl ca-certificates
 
-# 2. gecit paket kaynağını ekle
-echo "src/gz gecit https://aliyusufergin.github.io/gecit/opkg" > /opt/etc/opkg/gecit.conf
+# 2. keendpi paket kaynağını ekle
+echo "src/gz keendpi https://aliyusufergin.github.io/keendpi/opkg" > /opt/etc/opkg/keendpi.conf
 
 # 3. Kur
 opkg update
-opkg install gecit
+opkg install keendpi
 ```
 
-Kurulum gecit'i hemen başlatır; router her açıldığında da kendiliğinden başlar. Çalıştığını görmek için:
+Kurulum keendpi'yi hemen başlatır; router her açıldığında da kendiliğinden başlar. Çalıştığını görmek için:
 
 ```sh
-/opt/etc/init.d/S51gecit check
+/opt/etc/init.d/S51keendpi check
 ```
 
-Engelli siteler `direct: blocked …`, `with gecit: ok` göstermeli (bkz. [Kontrol komutu](#kontrol-komutu)). Ardından telefonda Discord'u açmayı dene.
+Engelli siteler `direct: blocked …`, `with keendpi: ok` göstermeli (bkz. [Kontrol komutu](#kontrol-komutu)). Ardından telefonda Discord'u açmayı dene.
 
 ## Ayarlar
 
-Ayar dosyası: `/opt/etc/gecit/gecit.conf`. Değiştirdikten sonra:
+Ayar dosyası: `/opt/etc/keendpi/keendpi.conf`. Değiştirdikten sonra:
 
 ```sh
-/opt/etc/init.d/S51gecit restart
+/opt/etc/init.d/S51keendpi restart
 ```
 
-Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; gecit birkaç saniye içinde kendisi okur.
+Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; keendpi birkaç saniye içinde kendisi okur.
 
 | Ayar | Varsayılan | Anlamı |
 |---|---|---|
 | `ENABLED` | `yes` | `no`: kurulu ama kapalı (açılışta ve güncellemede de başlamaz). |
 | `MODE` | `auto` | `list`, `auto` veya `all`; bkz. [Liste modları](#liste-modları). |
-| `LISTS` | `/opt/etc/gecit/lists` | Alan adı listeleri. Klasör verilirse içindeki tüm `*.txt` dosyaları okunur. |
-| `EXCLUDE` | `/opt/etc/gecit/exclude.txt` | Hiçbir modda dokunulmayacak alan adları. |
-| `AUTO_LIST` | `/opt/etc/gecit/auto.txt` | `auto` modunun öğrendiği alan adları. |
+| `LISTS` | `/opt/etc/keendpi/lists` | Alan adı listeleri. Klasör verilirse içindeki tüm `*.txt` dosyaları okunur. |
+| `EXCLUDE` | `/opt/etc/keendpi/exclude.txt` | Hiçbir modda dokunulmayacak alan adları. |
+| `AUTO_LIST` | `/opt/etc/keendpi/auto.txt` | `auto` modunun öğrendiği alan adları. |
 | `HTTP` | `yes` | Düz HTTP (port 80) isteklerini de ele al. |
 | `VERBOSE` | `no` | `yes`: her bağlantıyı sistem günlüğüne yaz (sorun giderme için; çok satır üretir). |
 | `TTL` | `3` | Sahte paketin router'dan çıkarken TTL'i. Kablonet'te 2 ve 3 çalışır. Daha yakın sunucular için kendiliğinden düşürülür. |
@@ -117,9 +117,9 @@ Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; gecit birk
 
 **Listeler.** Her satıra bir alan adı yazılır; bir alan adı alt alan adlarını da kapsar (`discord.com` → `cdn.discord.com`). `#` ile başlayan satırlar yorumdur.
 
-- `lists/default.txt`: gecit ile gelen liste (Discord ve bilinen engelli siteler). **Güncellemede değişir**, düzenleme.
+- `lists/default.txt`: keendpi ile gelen liste (Discord ve bilinen engelli siteler). **Güncellemede değişir**, düzenleme.
 - Kendi alan adların için `lists/` içinde yeni bir dosya aç, ör. `lists/user.txt`. Güncellemeler bu dosyaya dokunmaz.
-- `exclude.txt`: gecit'in hiç dokunmaması gereken alan adları (bir site gecit ile bozuluyorsa buraya yaz).
+- `exclude.txt`: keendpi'nin hiç dokunmaması gereken alan adları (bir site keendpi ile bozuluyorsa buraya yaz).
 - `auto.txt`: öğrenilen alan adları. Yanlış öğrenilen bir satırı silmen yeterli.
 
 ## Liste modları
@@ -127,12 +127,12 @@ Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; gecit birk
 | Mod | Hangi bağlantılar |
 |---|---|
 | `list` | Yalnızca `LISTS` dosyalarındaki alan adları. |
-| `auto` (varsayılan) | `LISTS` + gecit'in öğrendikleri. Engelli bir siteye ilk bağlantı engellenir, gecit bunu fark edip siteyi `auto.txt`'ye ekler; **sayfayı yenilediğinde** açılır. |
+| `auto` (varsayılan) | `LISTS` + keendpi'nin öğrendikleri. Engelli bir siteye ilk bağlantı engellenir, keendpi bunu fark edip siteyi `auto.txt`'ye ekler; **sayfayı yenilediğinde** açılır. |
 | `all` | Bütün HTTPS/HTTP bağlantıları (EXCLUDE hariç). |
 
 `EXCLUDE` her modda önceliklidir.
 
-gecit bir siteyi şu durumlarda engelli sayar:
+keendpi bir siteyi şu durumlarda engelli sayar:
 - bağlantı, sunucunun cevap vermesine yetecek süreden çok önce sıfırlanırsa (DPI'nin sahte sıfırlaması: Kablonet'te ~1,6 ms, sunucudan gerçek cevap en az ~9 ms),
 - HTTPS isteğine TLS yerine bir HTTP yönlendirmesi gelirse (Güvenli İnternet'in engel sayfası).
 
@@ -141,11 +141,11 @@ Sunucuların kendi sıfırlamaları engel sayılmaz.
 ## Kontrol komutu
 
 ```sh
-/opt/etc/init.d/S51gecit check                 # listedeki tüm alan adları
-/opt/etc/init.d/S51gecit check ornek.com …     # verdiğin alan adları
+/opt/etc/init.d/S51keendpi check                 # listedeki tüm alan adları
+/opt/etc/init.d/S51keendpi check ornek.com …     # verdiğin alan adları
 ```
 
-Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (gecit'siz) ve **with gecit** (gecit'le, listede olmasa bile). Sonunda bir kontrol alan adı (`example.com`) vardır. Düz HTTP (port 80) engelleri bu komutla denenmez.
+Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (keendpi'siz) ve **with keendpi** (keendpi'yle, listede olmasa bile). Sonunda bir kontrol alan adı (`example.com`) vardır. Düz HTTP (port 80) engelleri bu komutla denenmez.
 
 | Sonuç | Anlamı |
 |---|---|
@@ -155,64 +155,64 @@ Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (
 | `blocked (closed)` / `blocked (no answer)` | Bağlantı kapatıldı / cevap gelmedi. |
 | `no connection` | Sunucuya bağlanılamadı. Çoğunlukla DNS'in engel adresi verdiğini gösterir; bkz. [Gereksinimler](#gereksinimler) madde 2. |
 | `no DNS answer` | Alan adının adresi yok (ör. yalnızca alt alan adları kullanılıyor). |
-| `engine not running` | gecit çalışmıyor; `with gecit` denenmedi. `S51gecit start`. |
-| `(not listed)` / `(excluded)` | gecit normalde bu alan adına dokunmaz; `with gecit` sütunu yine de denemenin sonucudur. |
+| `engine not running` | keendpi çalışmıyor; `with keendpi` denenmedi. `S51keendpi start`. |
+| `(not listed)` / `(excluded)` | keendpi normalde bu alan adına dokunmaz; `with keendpi` sütunu yine de denemenin sonucudur. |
 
-`direct: blocked`, `with gecit: ok` = engel var ve gecit aşıyor.
+`direct: blocked`, `with keendpi: ok` = engel var ve keendpi aşıyor.
 
 ## Güncelleme
 
 ```sh
 opkg update
-opkg upgrade gecit
+opkg upgrade keendpi
 ```
 
 Ayar dosyan, kendi listelerin ve öğrenilenler korunur.
 
-> `opkg install --force-reinstall gecit` **kullanma**: opkg bunu kaldırıp kurmak olarak işler ve `/opt/etc/gecit` silinir.
+> `opkg install --force-reinstall keendpi` **kullanma**: opkg bunu kaldırıp kurmak olarak işler ve `/opt/etc/keendpi` silinir.
 
 ## Kaldırma
 
 ```sh
-opkg remove --autoremove gecit
+opkg remove --autoremove keendpi
 ```
 
-Bu; gecit'i durdurur, kurallarını ve yüklediği çekirdek modülünü kaldırır, `/opt/etc/gecit` klasörünü (ayarlar, listeler, öğrenilenler) ve paket kaynağı dosyasını (`/opt/etc/opkg/gecit.conf`) siler, gecit ile gelen `iptables` paketini de kaldırır. **Kendi listelerini saklamak istiyorsan önce yedekle.**
+Bu; keendpi'yi durdurur, kurallarını ve yüklediği çekirdek modülünü kaldırır, `/opt/etc/keendpi` klasörünü (ayarlar, listeler, öğrenilenler) ve paket kaynağı dosyasını (`/opt/etc/opkg/keendpi.conf`) siler, keendpi ile gelen `iptables` paketini de kaldırır. **Kendi listelerini saklamak istiyorsan önce yedekle.**
 
-Router'daki DNS ayarlarına gecit hiç dokunmaz; onları kendin değiştirdiysen öyle kalır.
+Router'daki DNS ayarlarına keendpi hiç dokunmaz; onları kendin değiştirdiysen öyle kalır.
 
 ## Sorun giderme
 
-**Günlük.** gecit, Keenetic'in sistem günlüğüne yazar (web arayüzündeki sistem günlüğü sayfası), ya da Entware'de:
+**Günlük.** keendpi, Keenetic'in sistem günlüğüne yazar (web arayüzündeki sistem günlüğü sayfası), ya da Entware'de:
 
 ```sh
-ndmc -c "show log" | grep gecit
+ndmc -c "show log" | grep keendpi
 ```
 
 **Durum.**
 
 ```sh
-/opt/etc/init.d/S51gecit status
-iptables -t mangle -S | grep gecit     # kurallar (iptables gecit ile birlikte kurulur)
+/opt/etc/init.d/S51keendpi status
+iptables -t mangle -S | grep keendpi     # kurallar (iptables keendpi ile birlikte kurulur)
 ```
 
 **Bir site açılmıyor.**
-1. `/opt/etc/init.d/S51gecit check site.com` çalıştır.
+1. `/opt/etc/init.d/S51keendpi check site.com` çalıştır.
    - `direct: ok`: site engelli değil; sorun başka yerde.
    - `no connection`: DNS sorunu (madde 2).
-   - `with gecit: blocked …`: gecit bu engeli aşamıyor. `TTL`'i 2, 4 veya 5 yapıp `restart` ve tekrar `check` dene. Sonuç değişmezse operatör farklı bir yöntem kullanıyor olabilir; lütfen [bir issue aç](https://github.com/aliyusufergin/gecit/issues) ve `check` çıktısını, operatörünü ve denediğin `TTL` değerlerini ekle.
+   - `with keendpi: blocked …`: keendpi bu engeli aşamıyor. `TTL`'i 2, 4 veya 5 yapıp `restart` ve tekrar `check` dene. Sonuç değişmezse operatör farklı bir yöntem kullanıyor olabilir; lütfen [bir issue aç](https://github.com/aliyusufergin/keendpi/issues) ve `check` çıktısını, operatörünü ve denediğin `TTL` değerlerini ekle.
 2. `auto` moddaysan sayfayı bir kez yenile; ilk deneme öğrenme içindir. Kendin de `lists/user.txt`'ye ekleyebilirsin.
 
-**Bir site gecit ile bozuldu.** Alan adını `exclude.txt`'ye yaz.
+**Bir site keendpi ile bozuldu.** Alan adını `exclude.txt`'ye yaz.
 
-**gecit'i geçici olarak kapatmak.** `/opt/etc/init.d/S51gecit stop` (açılışta yine başlar). Kalıcı olarak kapatmak için `ENABLED=no`.
+**keendpi'yi geçici olarak kapatmak.** `/opt/etc/init.d/S51keendpi stop` (açılışta yine başlar). Kalıcı olarak kapatmak için `ENABLED=no`.
 
-**Ayrıntılı günlük.** `VERBOSE=yes` yapıp `restart`: gecit her bağlantıda ne yaptığını (sahte paket gönderdi mi, hangi TTL ile, sıfırlama geldi mi) günlüğe yazar. İşin bitince `no` yap.
+**Ayrıntılı günlük.** `VERBOSE=yes` yapıp `restart`: keendpi her bağlantıda ne yaptığını (sahte paket gönderdi mi, hangi TTL ile, sıfırlama geldi mi) günlüğe yazar. İşin bitince `no` yap.
 
-**Ayar hatası.** `gecit validate` hatanın satırını söyler:
+**Ayar hatası.** `keendpi validate` hatanın satırını söyler:
 
 ```sh
-/opt/sbin/gecit validate
+/opt/sbin/keendpi validate
 ```
 
 ## Operatörler
@@ -238,32 +238,32 @@ Kendi operatöründe denediysen, sonucu (`check` çıktısı ve kullandığın `
 
 Big-endian `mips` için paket yok.
 
-Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) KN-3811'de Netfilter bileşeniyle geliyor; gecit yüklü değillerse kendisi yükler, bulamazsa günlüğe yazar.
+Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) KN-3811'de Netfilter bileşeniyle geliyor; keendpi yüklü değillerse kendisi yükler, bulamazsa günlüğe yazar.
 
 ## Sınırlar
 
-- **IP ile engellenen siteler** ve **hız kısıtlaması** aşılamaz; gecit bir VPN değildir.
-- **DNS** engellerini gecit çözmez; şifreli DNS gerekir (madde 2).
+- **IP ile engellenen siteler** ve **hız kısıtlaması** aşılamaz; keendpi bir VPN değildir.
+- **DNS** engellerini keendpi çözmez; şifreli DNS gerekir (madde 2).
 - Yalnızca **IPv4**. QUIC (HTTP/3) ele alınmaz; Kablonet'te QUIC engellenmiyor.
-- Site adı ilk paketin dışında kalan (büyük) ClientHello'larda gecit adı göremediği için sahte paketi her durumda gönderir; bu bağlantılarda `EXCLUDE` uygulanamaz. Sahte paket sunucuya ulaşmadığından zararsızdır.
+- Site adı ilk paketin dışında kalan (büyük) ClientHello'larda keendpi adı göremediği için sahte paketi her durumda gönderir; bu bağlantılarda `EXCLUDE` uygulanamaz. Sahte paket sunucuya ulaşmadığından zararsızdır.
 - Router'a ~3 ms'den yakın engelli sunucular `auto` modda öğrenilemez; onları listeye kendin ekle.
-- Kaldırma, `/opt/etc/gecit` altındaki her şeyi siler.
+- Kaldırma, `/opt/etc/keendpi` altındaki her şeyi siler.
 
 ## Sorumluluk
 
-gecit, erişimi kısıtlanan içeriğe ulaşmak için kullanılabilecek bir ağ aracıdır. Kullanımının yasal sonuçları kullanıcıya aittir; yazılım "olduğu gibi", hiçbir garanti olmadan sunulur (bkz. lisanslar).
+keendpi, erişimi kısıtlanan içeriğe ulaşmak için kullanılabilecek bir ağ aracıdır. Kullanımının yasal sonuçları kullanıcıya aittir; yazılım "olduğu gibi", hiçbir garanti olmadan sunulur (bkz. lisanslar).
 
 ## Geliştirme
 
 ```sh
 docker/build.sh test                                                  # birim testleri
 docker/build.sh build --release --target aarch64-unknown-linux-musl   # router için ikili
-tools/mkipk.sh                                                        # dist/gecit_<sürüm>_aarch64-3.10.ipk
+tools/mkipk.sh                                                        # dist/keendpi_<sürüm>_aarch64-3.10.ipk
 ```
 
 Sürüm yayınlama: [RELEASING.md](RELEASING.md).
 
-Kod düzeni: `src/engine.rs` (paket işleme, öğrenme), `src/supervise.rs` (bekçi), `src/check.rs`, `files/rules.sh` (netfilter kuralları), `files/S51gecit` (servis), `files/50-gecit.sh` (NDM kancası).
+Kod düzeni: `src/engine.rs` (paket işleme, öğrenme), `src/supervise.rs` (bekçi), `src/check.rs`, `files/rules.sh` (netfilter kuralları), `files/S51keendpi` (servis), `files/50-keendpi.sh` (NDM kancası).
 
 ## Lisans
 

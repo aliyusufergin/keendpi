@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gecit"
+name = "keendpi"
 version = "0.1.4"
 dependencies = [
  "libc",

@@ -1,10 +1,10 @@
 [package]
-name = "gecit"
+name = "keendpi"
 version = "0.1.4"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Small DPI-circumvention engine for Keenetic routers (NFQUEUE)"
-repository = "https://github.com/aliyusufergin/gecit"
+repository = "https://github.com/aliyusufergin/keendpi"
 readme = "README.en.md"
 
 [dependencies]

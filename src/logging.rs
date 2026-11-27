@@ -28,10 +28,10 @@ pub fn line(msg: std::fmt::Arguments) {
     match SYSLOG.get() {
         Some(m) => {
             let text = msg.to_string();
-            let text = text.strip_prefix("gecit: ").unwrap_or(&text);
+            let text = text.strip_prefix("keendpi: ").unwrap_or(&text);
             // RFC 3164: <30> = facility daemon, severity info; then the timestamp, which the
             // Keenetic log parser needs to find the tag.
-            let line = format!("<30>{} gecit[{}]: {text}", stamp(), std::process::id());
+            let line = format!("<30>{} keendpi[{}]: {text}", stamp(), std::process::id());
             let Ok(mut s) = m.lock() else { return };
             if let Err(e) = s.send(line.as_bytes()) {
                 // syslogd restarted: reconnect once. (A full buffer, WouldBlock, just loses the line.)
