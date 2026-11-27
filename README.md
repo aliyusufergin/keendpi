@@ -1,272 +1,216 @@
 # keendpi
 
-**Keenetic router'lar için DPI engeli aşma aracı.** Discord, SNI/HTTP ile engellenen siteler ve "Güvenli İnternet" filtresi, ağdaki **bütün cihazlarda** (telefon, TV, konsol, misafirler), cihazlarda hiçbir ayar yapmadan açılır. VPN değildir; trafiğin başka bir sunucudan geçmez.
+[![build](https://github.com/aliyusufergin/keendpi/actions/workflows/build.yml/badge.svg)](https://github.com/aliyusufergin/keendpi/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/aliyusufergin/keendpi)](https://github.com/aliyusufergin/keendpi/releases)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-[English](README.en.md)
+Transparent DPI circumvention for Keenetic routers.
 
-- Router'da çalışan küçük bir motordur (Rust, ~600 KB). Bir bağlantının yalnızca ilk birkaç paketine bakar, gerisi Keenetic'in hızlı yolundan (FASTNAT) geçer. Ölçümde ping'e en fazla +0,1 ms ekledi, hızın %98'inden fazlası korundu.
-- Motor durursa ya da çökerse internet çalışmaya devam eder, yalnızca engel aşma devre dışı kalır.
-- Router yeniden başlayınca ve internet bağlantısı kopup gelince kendiliğinden devam eder.
-- Kaldırınca iz bırakmaz.
+keendpi runs on the router under Entware and gets connections past SNI- and Host-based blocking for every device on the network. Devices need no client, proxy or VPN, and traffic does not leave the normal route.
 
-> Durum: Türksat Kablonet'te (PPPoE) Keenetic Hopper KN-3811 üzerinde test edildi. Diğer operatörler ve modeller test edilmedi; bkz. [Operatörler](#operatörler) ve [Modeller](#modeller).
+[Türkçe](README.tr.md)
 
-## İçindekiler
+## Features
 
-- [Nasıl çalışır](#nasıl-çalışır)
-- [Gereksinimler](#gereksinimler)
-- [Kurulum](#kurulum)
-- [Ayarlar](#ayarlar)
-- [Liste modları](#liste-modları)
-- [Kontrol komutu](#kontrol-komutu)
-- [Güncelleme](#güncelleme)
-- [Kaldırma](#kaldırma)
-- [Sorun giderme](#sorun-giderme)
-- [Operatörler](#operatörler)
-- [Modeller](#modeller)
-- [Sınırlar](#sınırlar)
-- [Sorumluluk](#sorumluluk)
-- [Geliştirme](#geliştirme)
-- [Lisans](#lisans)
+- **Network-wide.** Every LAN device benefits, with no per-device setup.
+- **Low overhead.** Only the first packets of each connection are inspected, and the rest stays on Keenetic's fast path. On the reference device, median ping rose by at most 0.1 ms and throughput stayed above 98 %.
+- **Fail-open.** If the engine stops or hangs, traffic passes untouched. A watchdog restarts a hung engine within about a second.
+- **Self-learning.** In `auto` mode, blocked domains are detected from forged resets and injected block pages, and added to a list.
+- **Persistent.** Rules survive reboots, WAN reconnects and the firmware rewriting its netfilter tables.
+- **Clean uninstall.** Removing the package removes everything it added.
 
-## Nasıl çalışır
+## How it works
 
-Operatörün DPI cihazı, HTTPS bağlantısının ilk paketindeki (TLS ClientHello) site adına (SNI) bakar ve engelli bir site görürse bağlantıyı keser ya da engel sayfasına yönlendirir.
+DPI middleboxes read the server name from the first data packet of a connection: the TLS ClientHello (SNI) or the HTTP `Host` header. When the name is on a blocklist, they reset the connection or inject a redirect.
 
-keendpi, engelli bir siteye giden bağlantının ilk paketinden hemen önce **sahte bir ilk paket** gönderir. Sahte pakette zararsız bir site adı (`www.google.com`) vardır ve TTL değeri, paket DPI cihazını geçtikten sonra yolda ölecek kadar düşüktür. DPI sahte paketi görür, bağlantıyı serbest bırakır; sahte paket sunucuya hiç ulaşmaz. Gerçek paket olduğu gibi gider. Düz HTTP (port 80) için de aynısını yapar.
+keendpi queues the first request of each connection via NFQUEUE. For connections that should be protected, it sends a decoy request ahead of the real one:
 
-- Hangi bağlantılara uygulanacağını listeler belirler (`auto` modda keendpi engelli siteleri kendisi de öğrenir).
-- Sunucunun kaç adım uzakta olduğunu ölçer ve sahte paketin sunucuya asla ulaşmayacağı bir TTL seçer.
-- Hiçbir veri router dışına gönderilmez; keendpi kimseye bağlanmaz, telemetri yoktur.
+- The decoy is a ClientHello or HTTP request for a harmless name (`www.google.com` by default).
+- Its TTL is low enough to pass the DPI box but expire before the server. The TTL is capped from the hop distance measured on the SYN-ACK.
 
-## Gereksinimler
+The DPI box classifies the connection on the decoy, and the real request then passes unchanged. keendpi never modifies, delays or drops the original packets.
 
-1. **OPKG ve Entware.** Keenetic web arayüzünde, genel sistem ayarlarındaki bileşen seçeneklerinden şu bileşenler kurulu olmalı:
-   - **OPKG paket yöneticisi**,
-   - **Netfilter alt sistemi için çekirdek modülleri** (Netfilter subsystem kernel modules),
-   - **DNS-over-TLS proxy** ve/veya **DNS-over-HTTPS proxy** (madde 2 için).
+TLS is handled on any TCP port, and plain HTTP on port 80. keendpi makes no outbound connections of its own and collects no telemetry.
 
-   Entware bir USB belleğe kurulu olmalı (help.keenetic.com'da "Entware" diye aratınca çıkan resmi rehber). Entware'e SSH ile bağlanabilmelisin (genellikle `ssh root@192.168.1.1 -p 222`).
+## Compatibility
 
-2. **Şifreli DNS (DoH/DoT).** Operatörler engelli siteler için DNS'te de yanlış adres verir. Kablonet düz DNS sorgularını (1.1.1.1 ve 8.8.8.8 dahil) yolda yakalayıp engel sayfası adresini döndürür. keendpi DNS'e dokunmaz. Keenetic'te (menü adları sürüme göre değişebilir):
-   - İnternet güvenliği / DNS yapılandırması bölümünden bir **DNS-over-TLS** veya **DNS-over-HTTPS** sunucusu ekle (ör. `1.1.1.1:853`, SNI `cloudflare-dns.com`),
-   - düz DNS sunucularını kaldır; internet bağlantısının ayarlarında **sağlayıcının DNS'ini yok say** seçeneğini aç,
-   - cihazlara DHCP ile ayrıca DNS sunucusu dağıtıyorsan (ör. `1.1.1.1`), onu da kaldır ki cihazlar router'ı kullansın.
+### Routers
 
-   Aynısı Entware'den, Keenetic komut satırıyla (`ndmc`) da yapılabilir:
+| Entware architecture (`opkg print-architecture`) | Status |
+|---|---|
+| `aarch64-3.10` | Tested: Keenetic Hopper KN-3811, KeeneticOS 5.1 |
+| `mipsel-3.4` | Builds; untested |
+| `mips-3.4` (big-endian) | Not supported |
+
+### ISPs (Turkey)
+
+| ISP | Status | Notes |
+|---|---|---|
+| Türksat Kablonet | Tested | TCP resets and "Güvenli İnternet" redirects. `TTL=3` (2 also works). |
+| Türk Telekom | Untested | Reported to reset like Kablonet. Try the defaults, then `TTL` 2–5. |
+| Vodafone | Untested | Reported to reset. Try the defaults, then `TTL` 2–5. |
+| Superonline | Untested | Reported to use a different DPI vendor. |
+| TurkNet | Untested | Reported to block via DNS only; encrypted DNS may suffice. |
+
+Reports for other ISPs and models are welcome; see [Contributing](#contributing).
+
+## Requirements
+
+1. **Firmware components.** These must be installed: *OPKG package manager*, *Netfilter subsystem kernel modules*, and *DNS-over-TLS proxy* or *DNS-over-HTTPS proxy*. Entware must be installed on USB storage (see Keenetic's Entware guide on help.keenetic.com), with SSH access (default `ssh root@192.168.1.1 -p 222`).
+
+2. **Encrypted DNS.** ISPs also tamper with DNS, and some intercept plain DNS to any resolver. keendpi does not handle DNS, so configure DoT or DoH on the router and remove the plain DNS servers. From Entware:
 
    ```sh
    ndmc -c "dns-proxy tls upstream 1.1.1.1 853 sni cloudflare-dns.com"
-   ndmc -c "no ip name-server 1.1.1.1"        # varsa, her düz DNS sunucusu için
-   ndmc -c "copy running-config startup-config"   # kalıcı kaydet
+   ndmc -c "no ip name-server 1.1.1.1"           # repeat for each plain DNS server
+   ndmc -c "copy running-config startup-config"
    ```
 
-   Doğrulama: Entware'de `nslookup discord.com` komutu `195.175.254.2` gibi bir engel adresi değil, gerçek bir adres (`162.159.x.x`) vermeli.
+   Also turn on *Ignore DNS from provider* for the WAN connection, and make sure DHCP does not hand out a separate DNS server. `nslookup discord.com` on the router should return a real address, not a block-page address.
 
-3. Router'da başka bir DPI aracı (zapret, nfqws, ByeDPI vb.) **çalışmamalı**; aynı paketlerle uğraşırlar.
+3. **No other DPI tool** (zapret, nfqws, ByeDPI, …) running on the router.
 
-## Kurulum
+## Installation
 
-Entware'e SSH ile bağlan (normal bir oturum aç; `ssh … 'komut'` biçiminde tek komut çalıştırma, o zaman PATH farklı olur) ve şunları çalıştır:
+Run these in an interactive SSH session on Entware:
 
 ```sh
-# 1. HTTPS ile indirebilen wget. Keenetic'in Entware kurulumunda genelde hazır gelir;
-#    yalnızca yoksa kurulur (kuruluysa opkg install onu güncellerdi).
 opkg update
 opkg list-installed | grep -q '^wget-ssl ' || opkg install wget-ssl ca-certificates
-
-# 2. keendpi paket kaynağını ekle
 echo "src/gz keendpi https://aliyusufergin.github.io/keendpi/opkg" > /opt/etc/opkg/keendpi.conf
-
-# 3. Kur
 opkg update
 opkg install keendpi
 ```
 
-Kurulum sırasında `Package keendpi … has no valid architecture, ignoring` satırları görünebilir: paket kaynağında başka mimarilerin paketleri de var, opkg onları atlar. `keendpi stopped` ardından `keendpi: started` satırları da normaldir.
+The line `Package keendpi … has no valid architecture, ignoring` is expected: the feed carries several architectures.
 
-Kurulum keendpi'yi hemen başlatır; router her açıldığında da kendiliğinden başlar. Çalıştığını görmek için:
+The service starts immediately and at every boot. Verify it with:
 
 ```sh
 /opt/etc/init.d/S51keendpi check
 ```
 
-Engelli siteler `direct: blocked …`, `with keendpi: ok` göstermeli (bkz. [Kontrol komutu](#kontrol-komutu)). Ardından telefonda Discord'u açmayı dene.
+Packages are also attached to each [release](https://github.com/aliyusufergin/keendpi/releases).
 
-## Ayarlar
+## Configuration
 
-Ayar dosyası: `/opt/etc/keendpi/keendpi.conf`. Değiştirdikten sonra:
+The configuration lives in `/opt/etc/keendpi/keendpi.conf`. Apply changes with `/opt/etc/init.d/S51keendpi restart`. List files are reloaded automatically within a few seconds.
 
-```sh
-/opt/etc/init.d/S51keendpi restart
-```
-
-Liste dosyalarını değiştirdiğinde yeniden başlatmaya gerek yok; keendpi birkaç saniye içinde kendisi okur.
-
-| Ayar | Varsayılan | Anlamı |
+| Key | Default | Description |
 |---|---|---|
-| `ENABLED` | `yes` | `no`: kurulu ama kapalı (açılışta ve güncellemede de başlamaz). |
-| `MODE` | `auto` | `list`, `auto` veya `all`; bkz. [Liste modları](#liste-modları). |
-| `LISTS` | `/opt/etc/keendpi/lists` | Alan adı listeleri. Klasör verilirse içindeki tüm `*.txt` dosyaları okunur. |
-| `EXCLUDE` | `/opt/etc/keendpi/exclude.txt` | Hiçbir modda dokunulmayacak alan adları. |
-| `AUTO_LIST` | `/opt/etc/keendpi/auto.txt` | `auto` modunun öğrendiği alan adları. |
-| `HTTP` | `yes` | Düz HTTP (port 80) isteklerini de ele al. |
-| `VERBOSE` | `no` | `yes`: her bağlantıyı sistem günlüğüne yaz (sorun giderme için; çok satır üretir). |
-| `TTL` | `3` | Sahte paketin router'dan çıkarken TTL'i. Kablonet'te 2 ve 3 çalışır. Daha yakın sunucular için kendiliğinden düşürülür. |
-| `FAKE_HOST` | `www.google.com` | Sahte paketteki site adı. |
-| `WAN` | `auto` | İnternet arayüzü. `auto`: varsayılan rotanın arayüzü (PPPoE'de `ppp0`). Boşlukla ayrılmış birden çok ad yazılabilir. |
-| `QUEUE`, `MARK`, `FORCE_MARK` | `200`, `0x40000000`, `0x20000000` | Teknik ayrıntı; yalnızca başka bir araçla çakışırsa değiştir. |
+| `ENABLED` | `yes` | `no` keeps the package installed but inactive. |
+| `MODE` | `auto` | `list`, `auto` or `all` (see below). |
+| `LISTS` | `/opt/etc/keendpi/lists` | Domain list file, or a directory of `*.txt` files. |
+| `EXCLUDE` | `/opt/etc/keendpi/exclude.txt` | Domains never touched, in any mode. |
+| `AUTO_LIST` | `/opt/etc/keendpi/auto.txt` | Domains learned in `auto` mode. |
+| `HTTP` | `yes` | Also handle plain HTTP on port 80. |
+| `TTL` | `3` | Decoy TTL when leaving the router. It is lowered automatically for nearer servers. |
+| `FAKE_HOST` | `www.google.com` | Server name used in decoys. |
+| `WAN` | `auto` | WAN interface(s). `auto` uses the default route's interface. |
+| `VERBOSE` | `no` | Log every handled connection. |
+| `QUEUE`, `MARK`, `FORCE_MARK` | `200`, `0x40000000`, `0x20000000` | NFQUEUE number and packet-mark bits. |
 
-**Listeler.** Her satıra bir alan adı yazılır; bir alan adı alt alan adlarını da kapsar (`discord.com` → `cdn.discord.com`). `#` ile başlayan satırlar yorumdur.
+**List format.** One domain per line. Subdomains are included, and `#` starts a comment.
 
-- `lists/default.txt`: keendpi ile gelen liste (Discord ve bilinen engelli siteler). **Güncellemede değişir**, düzenleme.
-- Kendi alan adların için `lists/` içinde yeni bir dosya aç, ör. `lists/user.txt`. Güncellemeler bu dosyaya dokunmaz.
-- `exclude.txt`: keendpi'nin hiç dokunmaması gereken alan adları (bir site keendpi ile bozuluyorsa buraya yaz).
-- `auto.txt`: öğrenilen alan adları. Yanlış öğrenilen bir satırı silmen yeterli.
-
-## Liste modları
-
-| Mod | Hangi bağlantılar |
+| File | Purpose |
 |---|---|
-| `list` | Yalnızca `LISTS` dosyalarındaki alan adları. |
-| `auto` (varsayılan) | `LISTS` + keendpi'nin öğrendikleri. Engelli bir siteye ilk bağlantı engellenir, keendpi bunu fark edip siteyi `auto.txt`'ye ekler; **sayfayı yenilediğinde** açılır. |
-| `all` | Bütün HTTPS/HTTP bağlantıları (EXCLUDE hariç). |
+| `lists/default.txt` | Shipped list; replaced on upgrade. |
+| `lists/*.txt` | Your own lists, for example `lists/user.txt`; kept on upgrade. |
+| `exclude.txt` | Domains to leave alone. |
+| `auto.txt` | Learned domains; delete a line to forget one. |
 
-`EXCLUDE` her modda önceliklidir.
+### Modes
 
-keendpi bir siteyi şu durumlarda engelli sayar:
-- bağlantı, sunucunun cevap vermesine yetecek süreden çok önce sıfırlanırsa (DPI'nin sahte sıfırlaması: Kablonet'te ~1,6 ms, sunucudan gerçek cevap en az ~9 ms),
-- HTTPS isteğine TLS yerine bir HTTP yönlendirmesi gelirse (Güvenli İnternet'in engel sayfası).
-
-Sunucuların kendi sıfırlamaları engel sayılmaz.
-
-## Kontrol komutu
-
-```sh
-/opt/etc/init.d/S51keendpi check                 # listedeki tüm alan adları
-/opt/etc/init.d/S51keendpi check ornek.com …     # verdiğin alan adları
-```
-
-Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (keendpi'siz) ve **with keendpi** (keendpi'yle, listede olmasa bile). Sonunda bir kontrol alan adı (`example.com`) vardır. Düz HTTP (port 80) engelleri bu komutla denenmez.
-
-| Sonuç | Anlamı |
+| Mode | Connections handled |
 |---|---|
-| `ok` | Sunucu cevap verdi. |
-| `blocked (reset)` | Bağlantı sıfırlandı (DPI). |
-| `blocked (block page)` | Engel sayfasına yönlendirildi (ör. Güvenli İnternet). |
-| `blocked (closed)` / `blocked (no answer)` | Bağlantı kapatıldı / cevap gelmedi. |
-| `no connection` | Sunucuya bağlanılamadı. DNS bir engel adresi veriyor olabilir (bkz. [Gereksinimler](#gereksinimler) madde 2) ya da adres IP ile engelli veya kapalı olabilir; keendpi bunu aşamaz. |
-| `no DNS answer` | Alan adının adresi yok (ör. yalnızca alt alan adları kullanılıyor). |
-| `engine not running` | keendpi çalışmıyor; `with keendpi` denenmedi. `S51keendpi start`. |
-| `(not listed)` / `(excluded)` | keendpi normalde bu alan adına dokunmaz; `with keendpi` sütunu yine de denemenin sonucudur. |
+| `list` | Domains in `LISTS`. |
+| `auto` | `LISTS` plus learned domains. The first blocked connection to a new domain teaches it, and the next one succeeds. |
+| `all` | Every TLS and HTTP connection. |
 
-`direct: blocked`, `with keendpi: ok` = engel var ve keendpi aşıyor.
+`EXCLUDE` takes precedence in every mode.
 
-## Güncelleme
+In `auto` mode, a connection counts as blocked in two cases:
+- a reset arrives in less than half the measured round-trip time, so the server could not have sent it;
+- the reply to a ClientHello is plain HTTP, which is an injected block page.
 
-```sh
-opkg update
-opkg upgrade keendpi
-```
-
-Ayar dosyan, kendi listelerin ve öğrenilenler korunur.
-
-> `opkg install --force-reinstall keendpi` **kullanma**: opkg bunu kaldırıp kurmak olarak işler ve `/opt/etc/keendpi` silinir.
-
-## Kaldırma
+## Usage
 
 ```sh
-opkg remove --autoremove keendpi
+/opt/etc/init.d/S51keendpi {start|stop|restart|status}
+/opt/etc/init.d/S51keendpi check [domain ...]   # compare direct vs. keendpi
+/opt/sbin/keendpi validate                      # check the configuration
 ```
 
-Bu; keendpi'yi durdurur, kurallarını ve yüklediği çekirdek modülünü kaldırır, `/opt/etc/keendpi` klasörünü (ayarlar, listeler, öğrenilenler) ve paket kaynağı dosyasını (`/opt/etc/opkg/keendpi.conf`) siler, keendpi ile gelen `iptables` paketini de kaldırır. **Kendi listelerini saklamak istiyorsan önce yedekle.**
+`check` makes two HTTPS connections per domain from the router: one direct and one through keendpi. It then tests a control domain.
 
-Router'daki DNS ayarlarına keendpi hiç dokunmaz; onları kendin değiştirdiysen öyle kalır.
-
-## Sorun giderme
-
-**Günlük.** keendpi, Keenetic'in sistem günlüğüne yazar (web arayüzündeki sistem günlüğü sayfası), ya da Entware'de:
-
-```sh
-ndmc -c "show log" | grep keendpi
-```
-
-**Durum.**
-
-```sh
-/opt/etc/init.d/S51keendpi status
-iptables -t mangle -S | grep keendpi     # kurallar (iptables keendpi ile birlikte kurulur)
-```
-
-**Bir site açılmıyor.**
-1. `/opt/etc/init.d/S51keendpi check site.com` çalıştır.
-   - `direct: ok`: site engelli değil; sorun başka yerde.
-   - `no connection`: DNS sorunu (madde 2).
-   - `with keendpi: blocked …`: keendpi bu engeli aşamıyor. `TTL`'i 2, 4 veya 5 yapıp `restart` ve tekrar `check` dene. Sonuç değişmezse operatör farklı bir yöntem kullanıyor olabilir; lütfen [bir issue aç](https://github.com/aliyusufergin/keendpi/issues) ve `check` çıktısını, operatörünü ve denediğin `TTL` değerlerini ekle.
-2. `auto` moddaysan sayfayı bir kez yenile; ilk deneme öğrenme içindir. Kendin de `lists/user.txt`'ye ekleyebilirsin.
-
-**Bir site keendpi ile bozuldu.** Alan adını `exclude.txt`'ye yaz.
-
-**keendpi'yi geçici olarak kapatmak.** `/opt/etc/init.d/S51keendpi stop` (açılışta yine başlar). Kalıcı olarak kapatmak için `ENABLED=no`.
-
-**Ayrıntılı günlük.** `VERBOSE=yes` yapıp `restart`: keendpi her bağlantıda ne yaptığını (sahte paket gönderdi mi, hangi TTL ile, sıfırlama geldi mi) günlüğe yazar. İşin bitince `no` yap.
-
-**Ayar hatası.** `keendpi validate` hatanın satırını söyler:
-
-```sh
-/opt/sbin/keendpi validate
-```
-
-## Operatörler
-
-| Operatör | Durum | Not |
-|---|---|---|
-| Türksat Kablonet | **Test edildi** | Engel: sıfırlama ve Güvenli İnternet yönlendirmesi. `TTL=3` (2 de çalışır). |
-| Türk Telekom | Test edilmedi | Kullanıcı raporlarına göre Kablonet'e benzer (sıfırlama). Önce varsayılanla dene, olmazsa `TTL` 2–5. |
-| Vodafone | Test edilmedi | Kullanıcı raporlarına göre sıfırlama. Varsayılanla dene, olmazsa `TTL` 2–5. |
-| Superonline | Test edilmedi | Farklı bir DPI cihazı kullandığı bildiriliyor; çalışmayabilir. |
-| TurkNet | Test edilmedi | Bildirilen engeller yalnızca DNS'te; şifreli DNS tek başına yetebilir. |
-
-Kendi operatöründe denediysen, sonucu (`check` çıktısı ve kullandığın `TTL`) bir issue ile paylaşırsan tablo güncellenir.
-
-## Modeller
-
-`opkg print-architecture` çıktısında hangi mimariyi gördüğüne bak:
-
-| Entware mimarisi | Durum |
+| Result | Meaning |
 |---|---|
-| `aarch64-3.10` | Test edildi (Keenetic Hopper KN-3811, KeeneticOS 5.1). |
-| `mipsel-3.4` | Paket derleniyor, **test edilmedi**. |
+| `ok` | The server answered. |
+| `blocked (reset)` | Reset by a middlebox. |
+| `blocked (block page)` | Redirected to a block page. |
+| `blocked (closed)`, `blocked (no answer)` | Closed, or no reply. |
+| `no connection` | TCP connect failed: DNS returned a block address, the IP is blocked, or the host is down. |
+| `no DNS answer` | The name does not resolve. |
+| `engine not running` | The service is stopped. |
 
-Big-endian `mips` için paket yok.
+`direct: blocked` together with `with keendpi: ok` means keendpi works for that domain.
 
-Gereken çekirdek modülleri (`nfnetlink_queue`, `xt_NFQUEUE`, `xt_u32`) KN-3811'de Netfilter bileşeniyle geliyor; keendpi yüklü değillerse kendisi yükler, bulamazsa günlüğe yazar.
-
-## Sınırlar
-
-- **IP ile engellenen siteler** ve **hız kısıtlaması** aşılamaz; keendpi bir VPN değildir.
-- **DNS** engellerini keendpi çözmez; şifreli DNS gerekir (madde 2).
-- Yalnızca **IPv4**. QUIC (HTTP/3) ele alınmaz; Kablonet'te QUIC engellenmiyor.
-- Site adı ilk paketin dışında kalan (büyük) ClientHello'larda keendpi adı göremediği için sahte paketi her durumda gönderir; bu bağlantılarda `EXCLUDE` uygulanamaz. Sahte paket sunucuya ulaşmadığından zararsızdır.
-- Router'a ~3 ms'den yakın engelli sunucular `auto` modda öğrenilemez; onları listeye kendin ekle.
-- Kaldırma, `/opt/etc/keendpi` altındaki her şeyi siler.
-
-## Sorumluluk
-
-keendpi, erişimi kısıtlanan içeriğe ulaşmak için kullanılabilecek bir ağ aracıdır. Kullanımının yasal sonuçları kullanıcıya aittir; yazılım "olduğu gibi", hiçbir garanti olmadan sunulur (bkz. lisanslar).
-
-## Geliştirme
+## Upgrading and uninstalling
 
 ```sh
-docker/build.sh test                                                  # birim testleri
-docker/build.sh build --release --target aarch64-unknown-linux-musl   # router için ikili
-tools/mkipk.sh                                                        # dist/keendpi_<sürüm>_aarch64-3.10.ipk
+opkg update && opkg upgrade keendpi    # configuration and lists are kept
+opkg remove --autoremove keendpi       # removes rules, files, the feed entry and iptables
 ```
 
-Sürüm yayınlama: [RELEASING.md](RELEASING.md).
+Uninstalling deletes `/opt/etc/keendpi`, including your lists. Avoid `opkg install --force-reinstall`: opkg treats it as remove-then-install, which deletes the configuration.
 
-Kod düzeni: `src/engine.rs` (paket işleme, öğrenme), `src/supervise.rs` (bekçi), `src/check.rs`, `files/rules.sh` (netfilter kuralları), `files/S51keendpi` (servis), `files/50-keendpi.sh` (NDM kancası).
+## Troubleshooting
 
-## Lisans
+- **Logs:** run `ndmc -c "show log" | grep keendpi`, or open the system log in the web interface. Set `VERBOSE=yes` for per-connection detail.
+- **Rules:** run `iptables -t mangle -S | grep keendpi`.
+- **A site still fails:** run `check` for it.
+  - `with keendpi: blocked`: try `TTL` values 2, 4 or 5.
+  - `no connection`: the block is not SNI-based (DNS or IP).
+  - `auto` mode: retry once, since the first attempt is used for learning.
+- **A site breaks:** add it to `exclude.txt`.
 
-MIT veya Apache-2.0, tercihine göre ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)).
+## Limitations
+
+- IP-based blocking and throttling cannot be bypassed; keendpi is not a VPN.
+- DNS-based blocking requires encrypted DNS on the router.
+- Only IPv4 TCP is handled. QUIC is not.
+- If a ClientHello's SNI falls outside its first segment, a decoy is sent regardless of lists, so `EXCLUDE` cannot apply to that connection. This is harmless.
+- In `auto` mode, blocks on servers less than about 3 ms away cannot be told apart from server resets. List such domains manually.
+
+## Building from source
+
+The build uses Docker, so no local Rust toolchain is needed.
+
+```sh
+docker/build.sh test
+docker/build.sh build --release --target aarch64-unknown-linux-musl
+tools/mkipk.sh            # → dist/keendpi_<version>-1_aarch64-3.10.ipk
+```
+
+| Path | Contents |
+|---|---|
+| `src/engine.rs` | Packet handling, decoys, learning |
+| `src/supervise.rs` | Worker supervision and watchdog |
+| `src/check.rs` | `check` command |
+| `files/rules.sh` | Netfilter rules |
+| `files/S51keendpi` | Init script |
+| `files/50-keendpi.sh` | NDM netfilter hook |
+
+Release steps are in [RELEASING.md](RELEASING.md), and changes are in [CHANGELOG.md](CHANGELOG.md).
+
+## Contributing
+
+Issues and pull requests are welcome. When reporting a site, ISP or router model, use the [issue template](https://github.com/aliyusufergin/keendpi/issues/new/choose) and include the `check` output.
+
+## Disclaimer
+
+keendpi is a networking tool. You are responsible for complying with the laws that apply to you. The software is provided "as is", without warranty of any kind.
+
+## License
+
+Licensed under either the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE), at your option.

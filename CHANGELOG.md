@@ -2,8 +2,8 @@
 
 ## 0.1.5
 
-- TLS on any TCP port, not only 443: Güvenli İnternet also blocks GeForce NOW's game stream (TLS on port 48322), which failed with error 0x800B1004.
-- `keendpi check` explains that "no connection" can also mean an IP block or a host that is down.
+- Handle TLS ClientHellos on any TCP port, not only 443. Some filters act on other TLS ports too (for example GeForce NOW session traffic on 48322).
+- `check`: the "no connection" hint now also covers IP blocks and unreachable hosts.
 
 ## 0.1.4
 
