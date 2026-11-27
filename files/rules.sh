@@ -3,12 +3,14 @@
 # Used by the init script and by the NDM netfilter.d hook, which re-runs `add` whenever the
 # router rewrites its tables. `add` is idempotent; `del` removes everything `add` created.
 #
-# keendpi_out (mangle POSTROUTING -o WAN): the first request of a connection only. keendpi_q marks the
-#   connection (connmark bit MARK; NDM keeps its own marks in ndmmark) so later requests skip.
-#   In auto mode also SYNs, to time the round trip that tells the DPI's resets apart.
+# keendpi_out (mangle POSTROUTING -o WAN): the first request of a connection only: a TLS ClientHello
+#   on any TCP port (filters also watch other TLS ports, e.g. GeForce NOW's 48322) or an HTTP request
+#   to port 80. keendpi_q marks the connection (connmark bit MARK; NDM keeps its own marks in
+#   ndmmark) so later requests skip. In auto mode also SYNs, to time the round trip that tells the
+#   DPI's resets apart. One or two packets per connection; the rest never reach the queue.
 # keendpi_in (mangle FORWARD and INPUT -i WAN): conntrack-ESTABLISHED SYN-ACKs (hop distance,
-#   round trip) and, in auto mode, RSTs and plain-HTTP answers on 443 (the block signals).
-#   Nothing unsolicited.
+#   round trip) and, in auto mode, RSTs and plain-HTTP answers from ports other than 80 (the
+#   block signals). Nothing unsolicited.
 # The jumps are appended at the end of each chain: an NFQUEUE verdict ends the chain, so NDM's
 # own mangle rules (MSS clamping, marks) must run before ours.
 # --queue-bypass: with no engine listening, packets pass untouched.
@@ -103,21 +105,17 @@ add_locked() {
   $IPT -A keendpi_q $NFQ
   $IPT -A keendpi_out -m mark --mark $MARK/$MARK -j RETURN
   $IPT -A keendpi_out -m connmark --mark $MARK/$MARK -j RETURN
-  $IPT -A keendpi_out -p tcp --dport 443 -m u32 --u32 "$U32_TLS" -j keendpi_q
-  ports=443
+  [ "$LEARN" = yes ] && $IPT -A keendpi_out -p tcp --tcp-flags SYN,ACK,RST SYN $NFQ
+  $IPT -A keendpi_out -p tcp -m u32 --u32 "$U32_TLS" -j keendpi_q
   if [ "$HTTP" = yes ]; then
-    ports="443 80"
     for x in $U32_HTTP; do
       $IPT -A keendpi_out -p tcp --dport 80 -m u32 --u32 "0>>22&0x3C@12>>26&0x3C@0=$x" -j keendpi_q
     done
   fi
-  for p in $ports; do
-    [ "$LEARN" = yes ] && $IPT -A keendpi_out -p tcp --dport $p --tcp-flags SYN,ACK,RST SYN $NFQ
-    $IPT -A keendpi_in -p tcp --sport $p --tcp-flags SYN,ACK,RST SYN,ACK -m conntrack --ctstate ESTABLISHED $NFQ
-    [ "$LEARN" = yes ] && $IPT -A keendpi_in -p tcp --sport $p --tcp-flags RST RST -m conntrack --ctstate ESTABLISHED $NFQ
-  done
-  # A filter's block page instead of a ServerHello: TCP payload starting "HTTP" from port 443.
-  [ "$LEARN" = yes ] && $IPT -A keendpi_in -p tcp --sport 443 -m u32 --u32 "$U32_HTTP_REPLY" -m conntrack --ctstate ESTABLISHED $NFQ
+  $IPT -A keendpi_in -p tcp --tcp-flags SYN,ACK,RST SYN,ACK -m conntrack --ctstate ESTABLISHED $NFQ
+  [ "$LEARN" = yes ] && $IPT -A keendpi_in -p tcp --tcp-flags RST RST -m conntrack --ctstate ESTABLISHED $NFQ
+  # A filter's block page instead of a ServerHello: TCP payload starting "HTTP" from a TLS port.
+  [ "$LEARN" = yes ] && $IPT -A keendpi_in -p tcp ! --sport 80 -m u32 --u32 "$U32_HTTP_REPLY" -m conntrack --ctstate ESTABLISHED $NFQ
   unhook
   for i in $w; do
     $IPT -A POSTROUTING -o $i -j keendpi_out || return 1

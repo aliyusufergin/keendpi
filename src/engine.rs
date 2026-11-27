@@ -1,9 +1,10 @@
 //! The worker: reads queued packets, sends fakes ahead of blocked requests, learns blocked domains.
 //!
 //! Packets it receives (see the rules in files/rules.sh):
-//! - outgoing first segments of TLS ClientHellos and HTTP requests (mangle POSTROUTING);
-//! - incoming SYN-ACKs from those ports, to measure the server's hop distance;
-//! - incoming RSTs from those ports, and plain-HTTP answers on port 443: the block signals that
+//! - outgoing first segments of TLS ClientHellos on any TCP port (GeForce NOW streams over TLS on
+//!   48322) and of HTTP requests to port 80 (mangle POSTROUTING);
+//! - incoming SYN-ACKs, to measure the server's hop distance;
+//! - incoming RSTs, and plain-HTTP answers from ports other than 80: the block signals that
 //!   `auto` mode learns from.
 //!
 //! Every packet is accepted unchanged; problems only mean "no fake for this one".
@@ -247,9 +248,10 @@ impl Engine {
         } else if f & RST != 0 {
             let key = Key { client: t.dst(), cport: t.dport(), server: t.src(), sport: t.sport() };
             self.on_block_signal(key, now, false);
-        } else if t.sport() == 443 && t.payload.starts_with(b"HTTP/") {
+        } else if t.sport() != 80 && t.payload.starts_with(b"HTTP/") {
             // A plain-HTTP answer to a ClientHello: a filter (Kablonet's "Güvenli İnternet"
-            // middlebox) redirecting to its block page. No TLS server sends that.
+            // middlebox, on 443 and on other TLS ports) redirecting to its block page. No TLS
+            // server sends that. It only counts for a flow whose ClientHello we saw.
             let key = Key { client: t.dst(), cport: t.dport(), server: t.src(), sport: t.sport() };
             self.on_block_signal(key, now, true);
         } else if !t.is_syn_fin_rst() && !t.payload.is_empty() {
