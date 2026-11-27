@@ -83,6 +83,8 @@ opkg update
 opkg install keendpi
 ```
 
+During install you may see `Package keendpi … has no valid architecture, ignoring`: the feed also holds packages for other architectures, and opkg skips them. `keendpi stopped` followed by `keendpi: started` is normal too.
+
 Installing starts keendpi right away, and it starts by itself at every boot. To see it working:
 
 ```sh
@@ -153,7 +155,7 @@ For each domain it makes two HTTPS (port 443) attempts from the router: **direct
 | `blocked (reset)` | The connection was reset (DPI). |
 | `blocked (block page)` | Redirected to a block page (e.g. Güvenli İnternet). |
 | `blocked (closed)` / `blocked (no answer)` | The connection was closed / nothing came back. |
-| `no connection` | Could not connect to the server. Usually DNS is giving a block address; see [Requirements](#requirements) item 2. |
+| `no connection` | Could not connect to the server. DNS may be giving a block address (see [Requirements](#requirements) item 2), or the address may be blocked by IP or down; keendpi can't get past that. |
 | `no DNS answer` | The domain has no address (e.g. only its subdomains are used). |
 | `engine not running` | keendpi isn't running, so `with keendpi` was not tried. Run `S51keendpi start`. |
 | `(not listed)` / `(excluded)` | keendpi would normally leave this domain alone; the `with keendpi` column still shows the attempt. |

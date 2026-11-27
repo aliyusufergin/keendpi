@@ -175,8 +175,8 @@ pub fn run(cfg: &Config, domains: Vec<String>) -> Result<(), String> {
     }
     if rows.iter().any(|r| r.direct == Some(Outcome::NoConnect) && r.via != Some(Outcome::Ok)) {
         println!(
-            "\n\"no connection\" usually means the DNS answer is the ISP's block address, not the site.\n\
-             keendpi does not fix DNS: use DNS-over-HTTPS/TLS on the router and remove plain DNS servers."
+            "\n\"no connection\": the DNS answer may be the ISP's block address (use DNS-over-HTTPS/TLS on\n\
+             the router and remove plain DNS servers), or the address is blocked by IP or down."
         );
     }
     Ok(())

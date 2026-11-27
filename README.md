@@ -83,6 +83,8 @@ opkg update
 opkg install keendpi
 ```
 
+Kurulum sırasında `Package keendpi … has no valid architecture, ignoring` satırları görünebilir: paket kaynağında başka mimarilerin paketleri de var, opkg onları atlar. `keendpi stopped` ardından `keendpi: started` satırları da normaldir.
+
 Kurulum keendpi'yi hemen başlatır; router her açıldığında da kendiliğinden başlar. Çalıştığını görmek için:
 
 ```sh
@@ -153,7 +155,7 @@ Her alan adı için router'dan iki HTTPS (port 443) denemesi yapar: **direct** (
 | `blocked (reset)` | Bağlantı sıfırlandı (DPI). |
 | `blocked (block page)` | Engel sayfasına yönlendirildi (ör. Güvenli İnternet). |
 | `blocked (closed)` / `blocked (no answer)` | Bağlantı kapatıldı / cevap gelmedi. |
-| `no connection` | Sunucuya bağlanılamadı. Çoğunlukla DNS'in engel adresi verdiğini gösterir; bkz. [Gereksinimler](#gereksinimler) madde 2. |
+| `no connection` | Sunucuya bağlanılamadı. DNS bir engel adresi veriyor olabilir (bkz. [Gereksinimler](#gereksinimler) madde 2) ya da adres IP ile engelli veya kapalı olabilir; keendpi bunu aşamaz. |
 | `no DNS answer` | Alan adının adresi yok (ör. yalnızca alt alan adları kullanılıyor). |
 | `engine not running` | keendpi çalışmıyor; `with keendpi` denenmedi. `S51keendpi start`. |
 | `(not listed)` / `(excluded)` | keendpi normalde bu alan adına dokunmaz; `with keendpi` sütunu yine de denemenin sonucudur. |
