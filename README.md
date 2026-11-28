@@ -28,7 +28,7 @@ keendpi queues the first request of each connection via NFQUEUE. For connections
 - The decoy is a ClientHello or HTTP request for a harmless name (`www.google.com` by default).
 - Its TTL is low enough to pass the DPI box but expire before the server. The TTL is capped from the hop distance measured on the SYN-ACK.
 
-The DPI box classifies the connection on the decoy, and the real request then passes unchanged. keendpi never modifies, delays or drops the original packets.
+The DPI box classifies the connection on the decoy, and the real request then passes unchanged. keendpi never modifies or drops the original packets. Only the first request and the handshake packets of a connection pass through the engine, which adds well under a millisecond to connection setup.
 
 TLS is handled on any TCP port, and plain HTTP on port 80. keendpi makes no outbound connections of its own and collects no telemetry.
 
@@ -141,7 +141,7 @@ In `auto` mode, a connection counts as blocked in two cases:
 /opt/sbin/keendpi validate                      # check the configuration
 ```
 
-`check` makes two HTTPS connections per domain from the router: one direct and one through keendpi. It then tests a control domain.
+`check` makes two HTTPS connections (port 443) per domain from the router: one direct and one through keendpi. It then tests a control domain. Blocks on other ports or on plain HTTP are not tested.
 
 | Result | Meaning |
 |---|---|

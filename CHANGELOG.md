@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- `auto` mode: a plain-HTTP answer on a port other than 443 now counts as a block only when it arrives faster than the server could answer, so plain-HTTP servers on other ports are no longer learned by mistake.
+- Connections that send no request (for example unanswered SYNs) leave the connection table after 5 s instead of 20 s, so heavy connection churn can't fill it.
+
 ## 0.1.5
 
 - Handle TLS ClientHellos on any TCP port, not only 443. Some filters act on other TLS ports too (for example GeForce NOW session traffic on 48322).

@@ -28,7 +28,7 @@ keendpi her bağlantının ilk isteğini NFQUEUE ile alır. Korunması gereken b
 - Yem, zararsız bir ad için (varsayılan `www.google.com`) bir ClientHello ya da HTTP isteğidir.
 - TTL'i, DPI cihazını geçecek ama sunucuya varmadan ölecek kadar düşüktür. TTL, SYN-ACK'ten ölçülen hop mesafesiyle sınırlanır.
 
-DPI cihazı bağlantıyı yeme göre sınıflandırır ve gerçek istek değişmeden geçer. keendpi asıl paketleri hiçbir zaman değiştirmez, geciktirmez ya da düşürmez.
+DPI cihazı bağlantıyı yeme göre sınıflandırır ve gerçek istek değişmeden geçer. keendpi asıl paketleri hiçbir zaman değiştirmez ya da düşürmez. Motordan yalnızca bağlantının ilk isteği ve el sıkışma paketleri geçer; bu, bağlantı kurulumuna bir milisaniyenin çok altında süre ekler.
 
 TLS her TCP portunda, düz HTTP ise 80 portunda işlenir. keendpi kendisi hiçbir yere bağlanmaz ve telemetri toplamaz.
 
@@ -141,7 +141,7 @@ Ayarlar `/opt/etc/keendpi/keendpi.conf` dosyasındadır. Değişiklikleri `/opt/
 /opt/sbin/keendpi validate                        # yapılandırmayı denetle
 ```
 
-`check`, her alan adı için router'dan iki HTTPS bağlantısı kurar: biri doğrudan, biri keendpi üzerinden. Sonra bir kontrol alan adını dener.
+`check`, her alan adı için router'dan iki HTTPS bağlantısı (port 443) kurar: biri doğrudan, biri keendpi üzerinden. Sonra bir kontrol alan adını dener. Diğer portlardaki ya da düz HTTP'deki engeller denenmez.
 
 | Sonuç | Anlamı |
 |---|---|

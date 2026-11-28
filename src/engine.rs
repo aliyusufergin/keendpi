@@ -22,6 +22,9 @@ const NF_INET_FORWARD: u8 = 2;
 /// A reset this soon after the request counts as a block signal.
 const BLOCK_WINDOW: Duration = Duration::from_secs(3);
 const FLOW_TTL: Duration = Duration::from_secs(20);
+/// Entries with no request yet (a SYN or SYN-ACK only): every TCP connection makes one, and the
+/// request follows within a round trip, so these go sooner and unanswered SYNs can't fill the table.
+const BARE_FLOW_TTL: Duration = Duration::from_secs(5);
 const MAX_FLOWS: usize = 16384;
 const MAX_LEARNED: usize = 2000;
 
@@ -365,7 +368,9 @@ impl Engine {
         // round trip after the request. A reset well inside that came from a box on the way.
         // (Kablonet's DPI answers in ~1.6 ms against a ~9 ms round trip, and copies the server's TTL.)
         let delay = now.duration_since(at);
-        let injected = redirect || flow.rtt.is_some_and(|rtt| injected(delay, rtt));
+        // On 443 a plain-HTTP answer is always a filter. On other ports a plain-HTTP server may be
+        // answering a TLS client by mistake, so there it must also beat the round trip.
+        let injected = (redirect && key.sport == 443) || flow.rtt.is_some_and(|rtt| injected(delay, rtt));
         if self.verbose && redirect {
             log!("keendpi: {name} redirected to a block page");
         } else if self.verbose {
@@ -398,7 +403,9 @@ impl Engine {
     fn housekeeping(&mut self, now: Instant) {
         if now.duration_since(self.last_prune) >= Duration::from_secs(2) {
             self.last_prune = now;
-            self.flows.retain(|_, f| now.duration_since(f.seen) < FLOW_TTL);
+            self.flows.retain(|_, f| {
+                now.duration_since(f.seen) < if f.request.is_some() { FLOW_TTL } else { BARE_FLOW_TTL }
+            });
         }
         while let Ok(l) = self.lists_rx.try_recv() {
             self.lists = l;
