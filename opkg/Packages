@@ -1,0 +1,26 @@
+Package: keendpi
+Version: 0.1.6-1
+Depends: iptables
+Section: net
+Architecture: aarch64-3.10
+Maintainer: aliyusufergin
+License: MIT OR Apache-2.0
+Installed-Size: 708
+Description: DPI-circumvention engine for Keenetic routers (Discord and other SNI/HTTP blocks)
+Filename: keendpi_0.1.6-1_aarch64-3.10.ipk
+Size: 353072
+SHA256sum: 010b165021309831b82c1c7836e9d062d1cb42fd03147efc82170dc2bff0abc4
+
+Package: keendpi
+Version: 0.1.6-1
+Depends: iptables
+Section: net
+Architecture: mipsel-3.4
+Maintainer: aliyusufergin
+License: MIT OR Apache-2.0
+Installed-Size: 956
+Description: DPI-circumvention engine for Keenetic routers (Discord and other SNI/HTTP blocks)
+Filename: keendpi_0.1.6-1_mipsel-3.4.ipk
+Size: 415482
+SHA256sum: d53bc776f0f5c21dfc7d94976d3b1bc7ca5b96669bece45021a910673ff367aa
+
